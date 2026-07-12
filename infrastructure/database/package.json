@@ -1,0 +1,18 @@
+{
+  "name": "database",
+  "version": "1.0.0",
+  "description": "UniChat Database Management",
+  "main": "index.js",
+  "scripts": {
+    "migrate": "prisma db push",
+    "generate": "prisma generate",
+    "seed": "node seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.14.0",
+    "bcryptjs": "^2.4.3"
+  },
+  "devDependencies": {
+    "prisma": "^5.14.0"
+  }
+}

@@ -1,0 +1,131 @@
+name: unichat
+
+services:
+  # 1. Database - Core Storage
+  postgres:
+    image: postgres:15-alpine
+    container_name: unichat-postgres
+    environment:
+      POSTGRES_USER: unichat_admin
+      POSTGRES_PASSWORD: unichat_password
+      POSTGRES_DB: unichat_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # 2. Cache - Presence & Session Storage
+  redis:
+    image: redis:7-alpine
+    container_name: unichat-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # 3. Message Broker - Event Streaming (Simplified with Redpanda for dev)
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: unichat-redpanda
+    command:
+      - redpanda start
+      - --smp 1
+      - --overprovisioned
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"
+      - "9644:9644"
+
+  # 4. API Gateway - NGINX
+  gateway:
+    image: nginx:alpine
+    container_name: unichat-gateway
+    ports:
+      - "80:80"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth-service
+      - messaging-service
+      - user-service
+      - tenant-service
+      - presence-service
+      - media-service
+
+  # 5. Core Services
+  auth-service:
+    build:
+      context: ./services/auth-service
+    container_name: unichat-auth-service
+    volumes:
+      - ./services/auth-service/src:/app/src
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://unichat_admin:unichat_password@postgres:5432/unichat_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: super_secret_unichat_key
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      - postgres
+      - redis
+
+  messaging-service:
+    build:
+      context: ./services/messaging-service
+    container_name: unichat-messaging-service
+    environment:
+      PORT: 3002
+      DATABASE_URL: postgresql://unichat_admin:unichat_password@postgres:5432/unichat_db
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      - postgres
+      - redis
+      - redpanda
+
+  tenant-service:
+    build:
+      context: ./services/tenant-service
+    container_name: unichat-tenant-service
+    environment:
+      PORT: 3004
+      DATABASE_URL: postgresql://unichat_admin:unichat_password@postgres:5432/unichat_db
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+
+  user-service:
+    build:
+      context: ./services/user-service
+    container_name: unichat-user-service
+    environment:
+      PORT: 3003
+      DATABASE_URL: postgresql://unichat_admin:unichat_password@postgres:5432/unichat_db
+      JWT_SECRET: super_secret_unichat_key
+    depends_on:
+      - postgres
+
+  presence-service:
+    build:
+      context: ./services/presence-service
+    container_name: unichat-presence-service
+    environment:
+      PORT: 3005
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - redis
+
+  media-service:
+    build:
+      context: ./services/media-service
+    container_name: unichat-media-service
+    environment:
+      PORT: 3006
+    volumes:
+      - ./services/media-service/uploads:/app/uploads
+
+volumes:
+  postgres_data:
+  redis_data:

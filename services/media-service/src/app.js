@@ -1,0 +1,77 @@
+const fastify = require('fastify')({ logger: true });
+const path = require('path');
+const fs = require('fs');
+const { pipeline } = require('stream/promises');
+
+fastify.register(require('@fastify/multipart'), {
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB global cap
+});
+
+const uploadsDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+// Static files served at /api/v1/media/uploads/* — matches the nginx proxy path
+fastify.register(require('@fastify/static'), {
+  root: uploadsDir,
+  prefix: '/api/v1/media/uploads/',
+});
+
+// General upload
+fastify.post('/api/v1/media/upload', async (req, reply) => {
+  const data = await req.file();
+  const filename = `${Date.now()}-${data.filename}`;
+  const filePath = path.join(uploadsDir, filename);
+  await pipeline(data.file, fs.createWriteStream(filePath));
+  return { url: `http://localhost/api/v1/media/uploads/${filename}`, type: data.mimetype, name: data.filename };
+});
+
+// Logo upload — images only, 2MB enforced after read
+fastify.post('/api/v1/media/upload/logo', async (req, reply) => {
+  const ALLOWED = ['image/png', 'image/jpeg', 'image/webp'];
+  const MAX_BYTES = 2 * 1024 * 1024;
+
+  let data;
+  try {
+    data = await req.file();
+  } catch (err) {
+    return reply.code(400).send({ error: 'Invalid multipart request' });
+  }
+
+  if (!data) {
+    return reply.code(400).send({ error: 'No file uploaded' });
+  }
+
+  if (!ALLOWED.includes(data.mimetype)) {
+    // drain the stream before rejecting so the connection stays clean
+    data.file.resume();
+    return reply.code(400).send({ error: 'Only PNG, JPEG or WebP images are accepted' });
+  }
+
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of data.file) {
+    total += chunk.length;
+    if (total > MAX_BYTES) {
+      return reply.code(400).send({ error: 'Logo must be under 2 MB' });
+    }
+    chunks.push(chunk);
+  }
+
+  const ext = data.mimetype === 'image/png' ? 'png'
+            : data.mimetype === 'image/webp' ? 'webp'
+            : 'jpg';
+  const filename = `logo-${Date.now()}.${ext}`;
+  fs.writeFileSync(path.join(uploadsDir, filename), Buffer.concat(chunks));
+
+  return { url: `http://localhost/api/v1/media/uploads/${filename}` };
+});
+
+const start = async () => {
+  try {
+    await fastify.listen({ port: process.env.PORT || 3006, host: '0.0.0.0' });
+  } catch (err) {
+    fastify.log.error(err);
+    process.exit(1);
+  }
+};
+start();

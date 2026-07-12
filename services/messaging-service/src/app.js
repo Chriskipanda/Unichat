@@ -1,0 +1,303 @@
+const fastify = require('fastify')({ logger: true });
+const { Server } = require('socket.io');
+const { Kafka } = require('kafkajs');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+
+// ── Upload directory ──────────────────────────────────────────────────────────
+const UPLOAD_DIR = '/app/uploads';
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+// Register plugins
+fastify.register(require('@fastify/multipart'), {
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB max
+});
+fastify.register(require('@fastify/static'), {
+  root: UPLOAD_DIR,
+  prefix: '/api/v1/messages/uploads/',
+});
+
+// Initialize Kafka
+const kafka = new Kafka({
+  clientId: 'messaging-service',
+  brokers: [process.env.KAFKA_BROKERS || 'localhost:9092']
+});
+const producer = kafka.producer();
+
+// Module-level io reference — assigned inside start() after server listens
+let io = null;
+
+fastify.get('/api/v1/messages/health', async (request, reply) => {
+  return { status: 'ok', service: 'messaging-service' };
+});
+
+/**
+ * Upload a media attachment and broadcast it as a message
+ * Accepts multipart/form-data with fields: senderId, senderName, tenantId + file
+ */
+fastify.post('/api/v1/messages/:groupId/media', async (request, reply) => {
+  const { groupId } = request.params;
+
+  // Parse multipart fields + file
+  const parts = request.parts();
+  const fields = {};
+  let savedPath = null;
+  let originalName = 'file';
+  let mimeType = 'application/octet-stream';
+
+  for await (const part of parts) {
+    if (part.file) {
+      // Determine extension from original filename
+      const ext = path.extname(part.filename || '').toLowerCase() || '.bin';
+      const uuid = crypto.randomUUID();
+      const filename = `${uuid}${ext}`;
+      savedPath = path.join(UPLOAD_DIR, filename);
+      originalName = part.filename || filename;
+      mimeType = part.mimetype || mimeType;
+
+      // Stream file to disk
+      const writeStream = fs.createWriteStream(savedPath);
+      await new Promise((resolve, reject) => {
+        part.file.pipe(writeStream);
+        part.file.on('end', resolve);
+        part.file.on('error', reject);
+      });
+
+      fields._filename = filename; // store for URL building
+    } else {
+      fields[part.fieldname] = part.value;
+    }
+  }
+
+  if (!savedPath || !fields.senderId) {
+    return reply.code(400).send({ error: 'file and senderId are required' });
+  }
+
+  // Resolve tenantId
+  let tenantId = fields.tenantId;
+  if (!tenantId) {
+    try {
+      const group = await prisma.group.findUnique({ where: { id: groupId }, select: { tenantId: true } });
+      tenantId = group?.tenantId;
+    } catch (_) {}
+  }
+
+  const messageId = crypto.randomUUID();
+  const now = new Date();
+  const senderName = fields.senderName || 'Unknown';
+
+  // Determine message type from mime
+  const isVideo = mimeType.startsWith('video/');
+  const msgType = isVideo ? 'video' : 'image';
+
+  // Relative URL — nginx routes /api/v1/messages/* to messaging_service
+  const fileUrl = `/api/v1/messages/uploads/${fields._filename}`;
+
+  // Persist to DB — store URL as content, type as 'image' or 'video'
+  try {
+    await prisma.message.create({
+      data: { id: messageId, tenantId, groupId, senderId: fields.senderId, content: fileUrl, createdAt: now },
+    });
+  } catch (err) {
+    fastify.log.error(`Failed to persist media message: ${err.message}`);
+    return reply.code(500).send({ error: 'Failed to save message' });
+  }
+
+  // Fetch sender avatar for the broadcast payload
+  let senderAvatar = null;
+  try {
+    const sender = await prisma.user.findUnique({
+      where: { id: fields.senderId },
+      select: { avatarUrl: true },
+    });
+    senderAvatar = sender?.avatarUrl ?? null;
+  } catch (_) {}
+
+  const payload = {
+    id: messageId,
+    roomId: groupId,
+    content: fileUrl,
+    senderId: fields.senderId,
+    senderName,
+    senderAvatar,
+    tenantId,
+    timestamp: now.toISOString(),
+    type: msgType,
+    originalName,
+  };
+
+  // Broadcast to all room members via socket (recipient sees it instantly)
+  if (io) io.to(groupId).emit('new_message', payload);
+
+  fastify.log.info(`[MEDIA] ${msgType} saved in room ${groupId} by ${senderName} — ${fields._filename}`);
+  return reply.code(201).send({ message: payload });
+});
+
+/**
+ * Send a Message (HTTP — reliable alternative to socket emit)
+ */
+fastify.post('/api/v1/messages/:groupId', async (request, reply) => {
+  const { groupId } = request.params;
+  const { content, senderId, senderName = 'Unknown', tenantId: bodyTenantId, replyToId } = request.body || {};
+
+  if (!content || !senderId) {
+    return reply.code(400).send({ error: 'content and senderId are required' });
+  }
+
+  // Resolve tenantId from group when client omits it
+  let tenantId = bodyTenantId;
+  if (!tenantId) {
+    try {
+      const group = await prisma.group.findUnique({ where: { id: groupId }, select: { tenantId: true } });
+      tenantId = group?.tenantId;
+    } catch (_) {}
+  }
+
+  const messageId = require('crypto').randomUUID();
+  const now = new Date();
+
+  try {
+    await prisma.message.create({
+      data: { id: messageId, tenantId, groupId, senderId, content, createdAt: now },
+    });
+  } catch (err) {
+    fastify.log.error(`Failed to persist message (HTTP): ${err.message}`);
+    return reply.code(500).send({ error: 'Failed to save message' });
+  }
+
+  const payload = {
+    id: messageId, roomId: groupId, content, senderId, senderName,
+    tenantId, replyToId: replyToId || null, timestamp: now.toISOString(),
+  };
+
+  // Broadcast to all sockets in the room
+  if (io) io.to(groupId).emit('new_message', payload);
+
+  fastify.log.info(`Message saved (HTTP) in room ${groupId} by ${senderName}`);
+  return reply.code(201).send({ message: payload });
+});
+
+/**
+ * Get Message History for a Group
+ */
+fastify.get('/api/v1/messages/:groupId', async (request, reply) => {
+  const { groupId } = request.params;
+  const { limit = '60', before } = request.query || {};
+
+  const messages = await prisma.message.findMany({
+    where: {
+      groupId,
+      ...(before ? { createdAt: { lt: new Date(before) } } : {}),
+    },
+    orderBy: { createdAt: 'asc' },
+    take: parseInt(limit),
+    include: { sender: { select: { fullName: true, avatarUrl: true } } },
+  });
+
+  return {
+    messages: messages.map(m => ({
+      id: m.id,
+      content: m.content,
+      senderId: m.senderId,
+      senderName: m.sender?.fullName ?? 'Unknown',
+      senderAvatar: m.sender?.avatarUrl ?? null,
+      timestamp: m.createdAt.toISOString(),
+      type: m.type ?? 'text',
+    })),
+  };
+});
+
+const start = async () => {
+  try {
+    await fastify.listen({ port: process.env.PORT || 3002, host: '0.0.0.0' });
+
+    // Attach Socket.IO (assign to module-level var so HTTP handlers can broadcast)
+    io = new Server(fastify.server, {
+      cors: { origin: '*' }
+    });
+
+    await producer.connect();
+
+    io.on('connection', (socket) => {
+      fastify.log.info(`User connected: ${socket.id}`);
+
+      // Join a room (e.g., a specific group/channel)
+      socket.on('join_room', (roomId) => {
+        socket.join(roomId);
+        fastify.log.info(`User ${socket.id} joined room: ${roomId}`);
+      });
+
+      // Handle New Message
+      socket.on('send_message', async (data) => {
+        const { roomId, content, senderId, senderName = 'Unknown', replyToId } = data;
+        let { tenantId } = data;
+
+        const messageId = require('crypto').randomUUID();
+        const now = new Date();
+
+        // Resolve tenantId from the group if the client didn't send it (or sent null)
+        if (!tenantId) {
+          try {
+            const group = await prisma.group.findUnique({ where: { id: roomId }, select: { tenantId: true } });
+            tenantId = group?.tenantId;
+          } catch (_) {}
+        }
+
+        const messagePayload = {
+          id: messageId,
+          roomId,
+          content,
+          senderId,
+          senderName,
+          tenantId,
+          replyToId: replyToId || null,
+          timestamp: now.toISOString(),
+          createdAt: now,
+        };
+
+        // 1. Broadcast to the room immediately (real-time)
+        io.to(roomId).emit('new_message', messagePayload);
+
+        // 2. Persist directly to DB so history is available instantly
+        try {
+          await prisma.message.create({
+            data: {
+              id: messageId,
+              tenantId,
+              groupId: roomId,
+              senderId,
+              content,
+              createdAt: now,
+            },
+          });
+        } catch (err) {
+          fastify.log.error(`Failed to persist message: ${err.message}`);
+        }
+
+        // 3. Publish to Kafka for downstream services (notifications, analytics)
+        try {
+          await producer.send({
+            topic: 'message_sent',
+            messages: [{ value: JSON.stringify(messagePayload) }],
+          });
+        } catch (err) {
+          fastify.log.warn(`Kafka publish failed (non-fatal): ${err.message}`);
+        }
+
+        fastify.log.info(`Message saved in room ${roomId} by ${senderName}`);
+      });
+
+      socket.on('disconnect', () => {
+        fastify.log.info(`User disconnected: ${socket.id}`);
+      });
+    });
+
+  } catch (err) {
+    fastify.log.error(err);
+    process.exit(1);
+  }
+};
+start();

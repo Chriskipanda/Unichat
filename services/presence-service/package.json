@@ -1,0 +1,19 @@
+{
+  "name": "@unichat/presence-service",
+  "version": "1.0.0",
+  "description": "User presence and typing indicator service",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js"
+  },
+  "dependencies": {
+    "fastify": "^4.24.0",
+    "socket.io": "^4.7.2",
+    "ioredis": "^5.3.2",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
