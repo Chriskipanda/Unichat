@@ -107,6 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
             name: r['name'] as String,
             subtitle: subtitle,
             lastMessage: (r['lastMessage'] as String?) ?? '',
+            lastMessageType: (r['lastMessageType'] as String?) ?? 'text',
             lastSender: lastSender,
             lastSenderId: r['lastSenderId'] as String?,
             avatarUrl: r['avatarUrl'] as String?,
@@ -1774,8 +1775,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: ListView.separated(
                     padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 80),
                     itemCount: chats.length,
+                    // Indent past the avatar (14 padding + 54 avatar + 12 gap) so
+                    // the rule starts under the name, as in WhatsApp.
                     separatorBuilder: (_, __) => Divider(
-                      height: 1, indent: 78, color: context.cl.divider.withValues(alpha: 0.5),
+                      height: 1, indent: 80, color: context.cl.divider.withValues(alpha: 0.5),
                     ),
                     itemBuilder: (_, i) => _buildChatTile(context, chats[i]),
                   ),
@@ -1858,9 +1861,33 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _chatSubtitle(ChatPreview chat) {
     if (chat.lastMessage.isEmpty) return 'No messages yet';
-    if (chat.lastSenderId == widget.user.id) return 'You: ${chat.lastMessage}';
-    if (chat.isGroup && chat.lastSender.isNotEmpty) return '${chat.lastSender}: ${chat.lastMessage}';
-    return chat.lastMessage;
+    // In a 1:1 the ticks already say the message is yours, so naming yourself is
+    // redundant — only groups need a "who said it" prefix.
+    if (chat.lastSenderId == widget.user.id) {
+      return chat.isGroup ? 'You: ${chat.preview}' : chat.preview;
+    }
+    if (chat.isGroup && chat.lastSender.isNotEmpty) return '${chat.lastSender}: ${chat.preview}';
+    return chat.preview;
+  }
+
+  /// Count badge: a true circle for one or two digits, widening into a pill only
+  /// when the number actually needs the room.
+  Widget _unreadBadge(int count) {
+    final label = count > 99 ? '99+' : '$count';
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+      padding: EdgeInsets.symmetric(horizontal: label.length > 2 ? 6 : 0),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        gradient: AppColors.brandGradient,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(label,
+        style: const TextStyle(
+          color: AppColors.bgMain, fontSize: 11.5, fontWeight: FontWeight.w800, height: 1,
+        )),
+    );
   }
 
   Widget _buildChatTile(BuildContext context, ChatPreview chat) {
@@ -1870,13 +1897,13 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: () => _openChat(chat),
         splashColor: AppColors.brand.withValues(alpha: 0.06),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           child: Row(
             children: [
               Stack(
                 children: [
                   _avatarCircle(
-                    radius: 26,
+                    radius: 27,
                     name: chat.name,
                     color: chat.avatarColor,
                     imageUrl: chat.avatarUrl,
@@ -1902,28 +1929,31 @@ class _HomeScreenState extends State<HomeScreen> {
                         Expanded(
                           child: Text(chat.name,
                             style: TextStyle(
-                              fontWeight: chat.unreadCount > 0 ? FontWeight.w700 : FontWeight.w600,
-                              fontSize: 15, color: context.cl.text,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16.5, color: context.cl.text,
                             ),
                             maxLines: 1, overflow: TextOverflow.ellipsis),
                         ),
                         const SizedBox(width: 8),
+                        // Unread is signalled by the accented time and the badge
+                        // below, so the name keeps one weight and the rows stay
+                        // on a single rhythm instead of jumping as mail arrives.
                         Text(formatChatTime(chat.lastMessageTime),
                           style: TextStyle(
-                            fontSize: 11,
-                            color: chat.unreadCount > 0 ? AppColors.brand : context.cl.textHint,
+                            fontSize: 12,
+                            color: chat.unreadCount > 0 ? AppColors.brandDeep : context.cl.textHint,
                             fontWeight: chat.unreadCount > 0 ? FontWeight.w700 : FontWeight.normal,
                           )),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Row(
                       children: [
                         // Tick icon when the current user sent the last message
                         if (chat.lastSenderId == widget.user.id && chat.lastMessage.isNotEmpty) ...[
-                          Icon(Icons.done_all_rounded, size: 15,
+                          Icon(Icons.done_all_rounded, size: 16,
                               color: chat.unreadCount == 0
-                                  ? AppColors.brand
+                                  ? AppColors.brandDeep
                                   : context.cl.textHint),
                           const SizedBox(width: 3),
                         ],
@@ -1931,20 +1961,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Text(
                             _chatSubtitle(chat),
                             style: TextStyle(
-                              fontSize: 13,
-                              color: chat.unreadCount > 0 ? context.cl.text : context.cl.textSec,
-                              fontWeight: chat.unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
+                              fontSize: 14,
+                              color: context.cl.textSec,
+                              height: 1.25,
                             ),
                             maxLines: 1, overflow: TextOverflow.ellipsis),
                         ),
-                        if (chat.unreadCount > 0)
-                          Container(
-                            margin: const EdgeInsets.only(left: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(gradient: AppColors.brandGradient, borderRadius: BorderRadius.circular(10)),
-                            child: Text(chat.unreadCount > 99 ? '99+' : '${chat.unreadCount}',
-                              style: const TextStyle(color: AppColors.bgMain, fontSize: 11, fontWeight: FontWeight.w800)),
-                          ),
+                        if (chat.unreadCount > 0) _unreadBadge(chat.unreadCount),
                       ],
                     ),
                   ],

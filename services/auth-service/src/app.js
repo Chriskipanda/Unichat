@@ -590,6 +590,9 @@ fastify.get('/api/v1/student/rooms', { preHandler: bearerAuth }, async (request)
         subtitle,
         avatarUrl: other?.user?.avatarUrl ?? null,            // DM partner's photo
         lastMessage: g.messages[0]?.content ?? '',
+        // Media stores its URL in content, so the client needs the type to show
+        // a label instead of printing the raw upload path in the chat list.
+        lastMessageType: g.messages[0]?.type ?? 'text',
         lastSenderName: g.type === 'private' ? '' : (g.messages[0]?.sender?.fullName ?? ''),
         lastSenderId: g.messages[0]?.senderId ?? null,
         lastSenderAvatar: g.messages[0]?.sender?.avatarUrl ?? null,

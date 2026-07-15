@@ -123,6 +123,11 @@ class UserModel {
 // ── Message ───────────────────────────────────────────────────
 enum MessageStatus { sending, sent, delivered, read }
 
+/// Media messages carry a URL in `content`, so anywhere a bitmap can't be drawn
+/// — chat-list previews, reply quotes — shows this label instead of the URL.
+bool isMediaType(String? type) => type == 'image' || type == 'video';
+String mediaLabelFor(String? type) => type == 'video' ? '🎥 Video' : '📷 Photo';
+
 class Message {
   /// Server-assigned UUID. Optimistic sends start with a temporary local id and
   /// adopt the server's once it responds — replying to or deleting a message
@@ -156,12 +161,6 @@ class Message {
   static String get _origin =>
       Config.baseUrl.startsWith('http') ? Config.baseUrl : 'http://${Config.baseUrl}';
 
-  static bool _isMediaType(String? type) => type == 'image' || type == 'video';
-
-  /// Label shown wherever a media message can't render its own bitmap —
-  /// chat list previews and reply quotes.
-  static String _mediaLabel(String? type) => type == 'video' ? '🎥 Video' : '📷 Photo';
-
   /// Single parser for both socket pushes and REST history, so a message looks
   /// identical whether it arrived live or was loaded from history.
   factory Message.fromJson(
@@ -171,11 +170,11 @@ class Message {
     final type = data['type'] as String?;
     final content = data['content'] as String? ?? '';
     // Image/video messages store a relative URL in content; build full URL
-    final isMedia = _isMediaType(type);
+    final isMedia = isMediaType(type);
 
     return Message(
       id: data['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      content: isMedia ? _mediaLabel(type) : content,
+      content: isMedia ? mediaLabelFor(type) : content,
       senderId: data['senderId']?.toString() ?? '',
       senderName: data['senderName'] ?? 'Unknown',
       timestamp: data['timestamp'] != null
@@ -196,7 +195,7 @@ class Message {
     final type = q['type'] as String?;
     return Message(
       id: q['id']?.toString() ?? '',
-      content: _isMediaType(type) ? _mediaLabel(type) : (q['content'] as String? ?? ''),
+      content: isMediaType(type) ? mediaLabelFor(type) : (q['content'] as String? ?? ''),
       senderId: q['senderId']?.toString() ?? '',
       senderName: q['senderName'] as String? ?? 'Unknown',
       timestamp: DateTime.now(),
@@ -222,6 +221,7 @@ class ChatPreview {
   final String name;
   final String subtitle;
   final String lastMessage;
+  final String lastMessageType; // 'text' | 'image' | 'video'
   final String lastSender;
   final String? lastSenderId;
   final String? avatarUrl;       // profile photo for DMs, null for groups
@@ -235,6 +235,7 @@ class ChatPreview {
     required this.name,
     this.subtitle = '',
     required this.lastMessage,
+    this.lastMessageType = 'text',
     this.lastSender = '',
     this.lastSenderId,
     this.avatarUrl,
@@ -243,6 +244,11 @@ class ChatPreview {
     this.isOnline = false,
     this.isGroup = false,
   });
+
+  /// What the row shows: an upload URL is meaningless to a reader, so media
+  /// collapses to a label.
+  String get preview =>
+      isMediaType(lastMessageType) ? mediaLabelFor(lastMessageType) : lastMessage;
 
   String get initials {
     final parts = name.trim().split(RegExp(r'\s+'));
