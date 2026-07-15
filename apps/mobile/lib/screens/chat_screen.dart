@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -802,7 +801,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       radius: radius,
       backgroundColor: color,
       foregroundImage: (imageUrl != null && imageUrl.isNotEmpty)
-          ? CachedNetworkImageProvider(imageUrl)
+          ? NetworkImage(imageUrl)
           : null,
       onForegroundImageError: (imageUrl != null && imageUrl.isNotEmpty)
           ? (_, __) {} : null,
@@ -875,8 +874,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       bottomRight: Radius.circular(isMe ? 0 : 16),
                     )
                   : borderRadius,
-              // Cached to disk, so a photo stays readable offline and across
-              // restarts instead of re-fetching (or failing) every build.
               child: msg.localImagePath != null
                   ? Image.file(
                       File(msg.localImagePath!),
@@ -884,19 +881,24 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       fit: BoxFit.cover,
                       errorBuilder: (ctx, err, stack) => _imagePlaceholder(),
                     )
-                  : CachedNetworkImage(
-                      imageUrl: msg.imageUrl!,
+                  : Image.network(
+                      msg.imageUrl!,
                       width: 224,
                       fit: BoxFit.cover,
-                      placeholder: (_, __) => SizedBox(
-                        width: 224, height: 180,
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            color: AppColors.brand, strokeWidth: 2.5,
-                          ),
-                        ),
-                      ),
-                      errorWidget: (ctx, url, err) => _imagePlaceholder(),
+                      loadingBuilder: (_, child, progress) => progress == null
+                          ? child
+                          : SizedBox(
+                              width: 224, height: 180,
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: AppColors.brand,
+                                  value: progress.expectedTotalBytes != null
+                                      ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                                      : null,
+                                ),
+                              ),
+                            ),
+                      errorBuilder: (ctx, err, stack) => _imagePlaceholder(),
                     ),
             ),
           ],

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Local copy of what the server last told us, so a cold start with no network
@@ -57,18 +56,6 @@ class ChatCache {
     if (id != null && existing.any((m) => m['id'] == id)) return; // echo or replay
     existing.add(raw);
     await saveMessages(roomId, existing);
-  }
-
-  /// Drop cached photos on logout. Clearing SharedPreferences takes care of the
-  /// message JSON, but image files live in a separate on-disk cache — on a
-  /// shared device those would otherwise outlive the session and be readable by
-  /// whoever signs in next.
-  static Future<void> clearMedia() async {
-    try {
-      await DefaultCacheManager().emptyCache();
-    } catch (_) {
-      // Never block sign-out on cache cleanup.
-    }
   }
 
   /// Move a room to the front of the index, evicting history past the cap.

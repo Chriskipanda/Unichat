@@ -1,12 +1,10 @@
 import 'dart:convert';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config.dart';
 import '../models/models.dart';
-import '../services/chat_cache.dart';
 import '../theme/theme_controller.dart';
 import 'tenant_screen.dart';
 
@@ -230,7 +228,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_avatarUrl.isNotEmpty) {
       return CircleAvatar(
         backgroundColor: widget.user.avatarColor,
-        backgroundImage: CachedNetworkImageProvider(_avatarUrl),
+        backgroundImage: NetworkImage(_avatarUrl),
         onBackgroundImageError: (_, __) {},
       );
     }
@@ -1458,7 +1456,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (confirm != true || !context.mounted) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-    await ChatCache.clearMedia(); // prefs.clear() misses the image files on disk
     if (!context.mounted) return;
     Navigator.pushAndRemoveUntil(
       context,

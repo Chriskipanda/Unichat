@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1362,7 +1361,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-    await ChatCache.clearMedia(); // prefs.clear() misses the image files on disk
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(context,
         MaterialPageRoute(builder: (_) => const TenantScreen()), (_) => false);
@@ -1757,7 +1755,7 @@ class _HomeScreenState extends State<HomeScreen> {
       radius: radius,
       backgroundColor: color,
       foregroundImage: (imageUrl != null && imageUrl.isNotEmpty)
-          ? CachedNetworkImageProvider(imageUrl)
+          ? NetworkImage(imageUrl)
           : null,
       onForegroundImageError: (imageUrl != null && imageUrl.isNotEmpty)
           ? (_, __) {} : null,
@@ -1864,7 +1862,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: CircleAvatar(
                   backgroundColor: color,
                   foregroundImage: (imageUrl != null && imageUrl.isNotEmpty)
-                      ? CachedNetworkImageProvider(imageUrl) : null,
+                      ? NetworkImage(imageUrl) : null,
                   onForegroundImageError: (imageUrl != null && imageUrl.isNotEmpty)
                       ? (_, __) {} : null,
                   child: Text(initials,
