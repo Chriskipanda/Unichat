@@ -1583,14 +1583,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ── UI helpers ──────────────────────────────────────────────────────────────
 
   Widget _sectionCard(BuildContext context, List<Widget> children) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      decoration: BoxDecoration(
+    // The card must be a Material, not a decorated Container: the ListTiles
+    // inside paint their background and ink ripples onto the nearest Material
+    // ancestor, so a Container's colour would sit on top and swallow them.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Material(
         color: context.cl.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.cl.divider.withValues(alpha: 0.5)),
+        clipBehavior: Clip.antiAlias, // keep ripples inside the rounded corners
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: context.cl.divider.withValues(alpha: 0.5)),
+        ),
+        child: Column(children: children),
       ),
-      child: Column(children: children),
     );
   }
 

@@ -541,11 +541,10 @@ fastify.get('/api/v1/student/rooms', { preHandler: bearerAuth }, async (request)
     return new Date(bt) - new Date(at);
   });
 
-  // Count unread messages per room using raw SQL.
-  // Prisma client inside this container was built before last_read_at was added to the schema,
-  // so we bypass the generated client and query the column directly.
-  // Note: Prisma created columns with camelCase names ("groupId", "senderId", "createdAt"),
-  // while our manually-added column uses snake_case (last_read_at).
+  // Count unread messages per room. Each room compares against its own
+  // lastReadAt, which a single Prisma groupBy can't express — hence raw SQL.
+  // Every column here is camelCase because Prisma created them that way; the
+  // identifiers must stay quoted or Postgres will fold them to lowercase.
   const groupIds = groups.map(g => g.id);
   let unreadRows = [];
   if (groupIds.length > 0) {
@@ -556,8 +555,8 @@ fastify.get('/api/v1/student/rooms', { preHandler: bearerAuth }, async (request)
        JOIN group_members gm ON gm."groupId" = m."groupId" AND gm."userId" = $1::uuid
        WHERE m."groupId" IN (${placeholders})
          AND m."senderId" != $1::uuid
-         AND gm.last_read_at IS NOT NULL
-         AND m."createdAt" > gm.last_read_at
+         AND gm."lastReadAt" IS NOT NULL
+         AND m."createdAt" > gm."lastReadAt"
        GROUP BY m."groupId"`,
       userId,
       ...groupIds
@@ -601,19 +600,19 @@ fastify.get('/api/v1/student/rooms', { preHandler: bearerAuth }, async (request)
   };
 });
 
-// Mark a room as read (update last_read_at via raw SQL — Prisma client predates this column)
+// Mark a room as read
 fastify.patch('/api/v1/student/rooms/:roomId/read', { preHandler: bearerAuth }, async (request, reply) => {
   const { userId } = request.user;
   const { roomId } = request.params;
   try {
-    const updated = await prisma.$executeRawUnsafe(
-      `UPDATE group_members SET last_read_at = NOW()
-       WHERE "groupId" = $1::uuid AND "userId" = $2::uuid`,
-      roomId, userId
-    );
-    if (updated === 0) return reply.code(404).send({ error: 'Room not found' });
+    await prisma.groupMember.update({
+      where: { groupId_userId: { groupId: roomId, userId } },
+      data: { lastReadAt: new Date() },
+    });
     return { ok: true };
   } catch (e) {
+    if (e.code === 'P2025') return reply.code(404).send({ error: 'Room not found' });
+    fastify.log.error(e);
     return reply.code(500).send({ error: e.message });
   }
 });
