@@ -74,9 +74,33 @@ async function main() {
     console.log('SuperAdmin already exists');
   }
 
+  // 4. Two ATC students. Testing chat needs two accounts — one can't DM itself
+  // — and students sign in with an OTP, so they carry no password.
+  const students = [
+    { fullName: 'Test Student',   email: 'student@atc.ac.tz',  studentId: 'ATC-2026-001' },
+    { fullName: 'Second Student', email: 'student2@atc.ac.tz', studentId: 'ATC-2026-002' },
+  ];
+  for (const s of students) {
+    const exists = await prisma.user.findFirst({
+      where: { tenantId: atc.id, email: s.email },
+    });
+    if (!exists) {
+      await prisma.user.create({
+        data: { ...s, tenantId: atc.id, role: 'student', isActive: true },
+      });
+      console.log(`Student created: ${s.fullName} (${s.studentId})`);
+    } else {
+      console.log(`Student already exists: ${s.fullName}`);
+    }
+  }
+
+  // The ATC admin gets a passwordHash above, but no endpoint accepts it:
+  // /auth/admin/login only matches role 'superadmin'. It signs in by OTP.
   console.log('\nSeed complete.');
-  console.log('  SuperAdmin login → superadmin@unichat.io / SuperAdmin@2026!');
-  console.log('  ATC Admin login  → admin@atc.ac.tz / ATCAdmin@2026!');
+  console.log('  SuperAdmin → superadmin@unichat.io / SuperAdmin@2026!   (password, at /login)');
+  console.log('  ATC Admin  → admin@atc.ac.tz                            (OTP, at /admin-login)');
+  console.log('  Students   → student@atc.ac.tz, student2@atc.ac.tz      (OTP, mobile app)');
+  console.log('  OTP codes are printed by auth-service: docker logs -f unichat-auth-service');
 }
 
 main()
