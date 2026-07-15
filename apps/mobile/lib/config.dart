@@ -28,7 +28,7 @@ class AppColorSet {
 class Config {
   // Runtime-editable — persisted in SharedPreferences under key 'server_url'.
   // Falls back to the hardcoded default if nothing is saved.
-  static String _baseUrl = '192.168.0.27';
+  static String _baseUrl = 'localhost';
   static String get baseUrl => _baseUrl;
 
   /// Load the saved server URL from storage (call once at startup).
@@ -50,7 +50,7 @@ class Config {
   }
 
   /// The hardcoded fallback, shown as placeholder in the picker.
-  static const String defaultUrl = '192.168.0.27';
+  static const String defaultUrl = 'localhost';
   static const String appName = 'UniChat';
 }
 
