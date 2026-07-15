@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -9,6 +10,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../config.dart';
 import '../models/models.dart';
+import '../services/chat_cache.dart';
 import '../widgets/attachment_sheet.dart';
 import '../widgets/chat_wallpaper.dart';
 
@@ -39,6 +41,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final List<Message> _messages = [];
   bool _isTyping = false;
   bool _loadingHistory = true;
+  bool _isOffline = false; // history came from cache, not the server
   bool _showAttachPanel = false;
   String _typingUser = '';
   Message? _replyingTo;
@@ -70,6 +73,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   Future<void> _loadHistory() async {
     setState(() => _loadingHistory = true);
+
+    // Paint the last synced copy first so the thread is readable immediately —
+    // offline it's all we'll ever have, and online it covers the fetch.
+    final cached = await ChatCache.loadMessages(widget.roomId);
+    if (!mounted) return;
+    if (cached != null && cached.isNotEmpty) {
+      setState(() {
+        _messages
+          ..clear()
+          ..addAll(cached.map(_messageFrom));
+        _loadingHistory = false;
+      });
+      _scrollToBottom();
+    }
+
     try {
       final res = await http.get(
         Uri.parse('http://${Config.baseUrl}/api/v1/messages/${widget.roomId}?limit=60'),
@@ -80,19 +98,34 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         final list = (data['messages'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-        final msgs = list.map((m) => Message.fromJson(
-          m,
-          status: m['senderId'] == widget.user.id ? MessageStatus.read : MessageStatus.delivered,
-        )).toList();
-        setState(() { _messages.clear(); _messages.addAll(msgs); _loadingHistory = false; });
+        setState(() {
+          _messages
+            ..clear()
+            ..addAll(list.map(_messageFrom));
+          _loadingHistory = false;
+          _isOffline = false;
+        });
         _scrollToBottom();
+        await ChatCache.saveMessages(widget.roomId, list);
       } else {
         setState(() => _loadingHistory = false);
       }
     } catch (_) {
-      if (mounted) setState(() => _loadingHistory = false);
+      if (!mounted) return;
+      // Keep whatever the cache gave us; only flag that it may be stale.
+      setState(() {
+        _loadingHistory = false;
+        _isOffline = true;
+      });
     }
   }
+
+  Message _messageFrom(Map<String, dynamic> json) => Message.fromJson(
+        json,
+        status: json['senderId'] == widget.user.id
+            ? MessageStatus.read
+            : MessageStatus.delivered,
+      );
 
   void _connectSocket() {
     try {
@@ -105,11 +138,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _socket!.onConnect((_) => _socket!.emit('join_room', widget.roomId));
       _socket!.on('new_message', (data) {
         if (!mounted) return;
-        final msg = Message.fromSocket(Map<String, dynamic>.from(data));
+        final raw = Map<String, dynamic>.from(data);
+        final msg = Message.fromSocket(raw);
         if (msg.senderId == widget.user.id) return; // our own echo — already shown optimistically
         if (_messages.any((m) => m.id == msg.id)) return; // duplicate after reconnect/history overlap
         setState(() => _messages.add(msg));
         _scrollToBottom();
+        ChatCache.appendMessage(widget.roomId, raw);
       });
       _presenceSocket = io.io('http://${Config.baseUrl}', <String, dynamic>{
         'transports': ['websocket'], 'autoConnect': true, 'path': '/presence/',
@@ -212,9 +247,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (res.statusCode == 201) {
         // Adopt the server's UUID — replying to or deleting this message sends
         // the id back, and the temporary local one would be rejected.
-        final serverId = (jsonDecode(res.body)['message'] as Map?)?['id'] as String?;
+        final sent = (jsonDecode(res.body)['message'] as Map?)?.cast<String, dynamic>();
+        final serverId = sent?['id'] as String?;
         if (serverId != null) msg.id = serverId;
         setState(() => msg.status = MessageStatus.sent);
+        if (sent != null) await ChatCache.appendMessage(widget.roomId, sent);
         await Future.delayed(const Duration(seconds: 1));
         if (mounted) setState(() => msg.status = MessageStatus.delivered);
       }
@@ -293,7 +330,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         // Parse the response to get the served URL and update the bubble
         final body = await streamed.stream.bytesToString();
         final decoded = jsonDecode(body) as Map<String, dynamic>;
-        final sent = decoded['message'] as Map?;
+        final sent = (decoded['message'] as Map?)?.cast<String, dynamic>();
         final relativeUrl = sent?['content'] as String?;
         if (relativeUrl != null) {
           msg.imageUrl = '$baseUrl$relativeUrl';
@@ -301,6 +338,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         final serverId = sent?['id'] as String?;
         if (serverId != null) msg.id = serverId;
         setState(() => msg.status = MessageStatus.sent);
+        if (sent != null) await ChatCache.appendMessage(widget.roomId, sent);
         await Future.delayed(const Duration(seconds: 1));
         if (mounted) setState(() => msg.status = MessageStatus.delivered);
       }
@@ -496,8 +534,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 Text(
                   _typingUser.isNotEmpty
                       ? '$_typingUser is typing...'
-                      : widget.isGroup ? widget.subtitle
-                          : widget.isOnline ? 'Online' : 'Last seen recently',
+                      : _isOffline
+                          ? 'Offline — showing saved messages'
+                          : widget.isGroup ? widget.subtitle
+                              : widget.isOnline ? 'Online' : 'Last seen recently',
                   style: TextStyle(
                     fontSize: 11,
                     color: _typingUser.isNotEmpty ? AppColors.typing : context.cl.textHint,
@@ -695,7 +735,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       radius: radius,
       backgroundColor: color,
       foregroundImage: (imageUrl != null && imageUrl.isNotEmpty)
-          ? NetworkImage(imageUrl)
+          ? CachedNetworkImageProvider(imageUrl)
           : null,
       onForegroundImageError: (imageUrl != null && imageUrl.isNotEmpty)
           ? (_, __) {} : null,
@@ -772,6 +812,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       bottomRight: Radius.circular(isMe ? 0 : 16),
                     )
                   : borderRadius,
+              // Cached to disk, so a photo stays readable offline and across
+              // restarts instead of re-fetching (or failing) every build.
               child: msg.localImagePath != null
                   ? Image.file(
                       File(msg.localImagePath!),
@@ -779,24 +821,19 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       fit: BoxFit.cover,
                       errorBuilder: (ctx, err, stack) => _imagePlaceholder(),
                     )
-                  : Image.network(
-                      msg.imageUrl!,
+                  : CachedNetworkImage(
+                      imageUrl: msg.imageUrl!,
                       width: 224,
                       fit: BoxFit.cover,
-                      loadingBuilder: (_, child, progress) => progress == null
-                          ? child
-                          : SizedBox(
-                              width: 224, height: 180,
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  color: AppColors.brand,
-                                  value: progress.expectedTotalBytes != null
-                                      ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                                      : null,
-                                ),
-                              ),
-                            ),
-                      errorBuilder: (ctx, err, stack) => _imagePlaceholder(),
+                      placeholder: (_, __) => SizedBox(
+                        width: 224, height: 180,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.brand, strokeWidth: 2.5,
+                          ),
+                        ),
+                      ),
+                      errorWidget: (ctx, url, err) => _imagePlaceholder(),
                     ),
             ),
           ],

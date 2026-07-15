@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config.dart';
+import '../services/chat_cache.dart';
 import '../widgets/chat_wallpaper.dart';
 import '../models/models.dart';
 import 'chat_screen.dart';
@@ -27,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _loadingRooms = true;
   bool _loadingClubs = true;
+  bool _isOffline = false; // showing cached rooms rather than a live fetch
   String _roomsError = '';
   String _clubsError = '';
 
@@ -79,7 +82,29 @@ class _HomeScreenState extends State<HomeScreen> {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         final rooms = (data['rooms'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+        _applyRooms(rooms);
+        setState(() { _loadingRooms = false; _isOffline = false; });
+        await ChatCache.saveRooms(rooms);
+      } else {
+        setState(() { _loadingRooms = false; _roomsError = 'Failed to load chats.'; });
+      }
+    } catch (_) {
+      // Offline (or the server is unreachable). Showing what we last synced
+      // beats an error page over chats the user has already read.
+      final cached = await ChatCache.loadRooms();
+      if (!mounted) return;
+      if (cached != null && cached.isNotEmpty) {
+        _applyRooms(cached);
+        setState(() { _loadingRooms = false; _isOffline = true; _roomsError = ''; });
+      } else {
+        setState(() { _loadingRooms = false; _roomsError = 'Network error.'; });
+      }
+    }
+  }
 
+  /// Turn the server's room payload into view models. Shared by the network and
+  /// cache paths so cached chats render identically to live ones.
+  void _applyRooms(List<Map<String, dynamic>> rooms) {
         final chats = rooms.map((r) {
           final type = r['type'] as String? ?? '';
           final isGroup = type != 'private';
@@ -88,8 +113,8 @@ class _HomeScreenState extends State<HomeScreen> {
           final roomId = r['id'] as String;
           final lastSender = (r['lastSenderName'] as String?) ?? '';
           final lastMsgAt = DateTime.tryParse((r['lastMessageAt'] as String?) ?? '');
-          // Server now returns accurate unread count via raw SQL (bypassing stale Prisma client).
-          // Use server value when available; fall back to local 0/1 heuristic only when absent.
+          // Prefer the server's count; fall back to a local 0/1 heuristic only
+          // when it's absent (an older cached payload won't carry the field).
           final serverUnread = (r['unreadCount'] as num?)?.toInt();
           int unreadCount;
           if (serverUnread != null) {
@@ -139,13 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             }).toList();
 
-        setState(() { _chats = chats; _groups = groups; _loadingRooms = false; });
-      } else {
-        setState(() { _loadingRooms = false; _roomsError = 'Failed to load chats.'; });
-      }
-    } catch (_) {
-      if (mounted) setState(() { _loadingRooms = false; _roomsError = 'Network error.'; });
-    }
+    setState(() { _chats = chats; _groups = groups; });
   }
 
   Future<void> _loadClubs() async {
@@ -1343,6 +1362,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
+    await ChatCache.clearMedia(); // prefs.clear() misses the image files on disk
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(context,
         MaterialPageRoute(builder: (_) => const TenantScreen()), (_) => false);
@@ -1737,7 +1757,7 @@ class _HomeScreenState extends State<HomeScreen> {
       radius: radius,
       backgroundColor: color,
       foregroundImage: (imageUrl != null && imageUrl.isNotEmpty)
-          ? NetworkImage(imageUrl)
+          ? CachedNetworkImageProvider(imageUrl)
           : null,
       onForegroundImageError: (imageUrl != null && imageUrl.isNotEmpty)
           ? (_, __) {} : null,
@@ -1764,6 +1784,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final chats = _filteredChats;
     return Column(
       children: [
+        if (_isOffline) _offlineBanner(context),
         _buildFilterBar(context),
         _buildOnlineRow(context),
         Expanded(
@@ -1785,6 +1806,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
         ),
       ],
+    );
+  }
+
+  /// Cached chats are real but may be stale, so say so rather than letting them
+  /// pass for live data.
+  Widget _offlineBanner(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: context.cl.cardLight,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.cloud_off_rounded, size: 14, color: context.cl.textSec),
+          const SizedBox(width: 8),
+          Text('No connection — showing saved chats',
+              style: TextStyle(fontSize: 12, color: context.cl.textSec)),
+        ],
+      ),
     );
   }
 
@@ -1824,7 +1864,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: CircleAvatar(
                   backgroundColor: color,
                   foregroundImage: (imageUrl != null && imageUrl.isNotEmpty)
-                      ? NetworkImage(imageUrl) : null,
+                      ? CachedNetworkImageProvider(imageUrl) : null,
                   onForegroundImageError: (imageUrl != null && imageUrl.isNotEmpty)
                       ? (_, __) {} : null,
                   child: Text(initials,
