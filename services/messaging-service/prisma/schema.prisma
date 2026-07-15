@@ -139,11 +139,14 @@ model Message {
   type      String   @default("text")
   metadata  Json     @default("{}")
   isEdited  Boolean  @default(false)
+  replyToId String?  @db.Uuid
   createdAt DateTime @default(now())
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  group  Group  @relation(fields: [groupId], references: [id])
-  sender User   @relation(fields: [senderId], references: [id])
+  tenant  Tenant    @relation(fields: [tenantId], references: [id])
+  group   Group     @relation(fields: [groupId], references: [id])
+  sender  User      @relation(fields: [senderId], references: [id])
+  replyTo Message?  @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies Message[] @relation("MessageReplies")
 
   @@index([groupId])
   @@index([tenantId, createdAt(sort: Desc)])

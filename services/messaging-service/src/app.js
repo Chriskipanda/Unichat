@@ -30,6 +30,34 @@ const producer = kafka.producer();
 // Module-level io reference — assigned inside start() after server listens
 let io = null;
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// A quote can name a message that never existed (client still holding a
+// temporary local id) or one since deleted — both would fail the FK and reject
+// the whole send. Confining the lookup to this group also stops a message from
+// quoting one in another room. Dropping the quote beats losing the message.
+async function resolveReplyToId(rawId, groupId) {
+  if (typeof rawId !== 'string' || !UUID_RE.test(rawId)) return null;
+  const found = await prisma.message.findFirst({
+    where: { id: rawId, groupId },
+    select: { id: true },
+  });
+  return found ? rawId : null;
+}
+
+// Shape a quoted message for clients. Media quotes carry no preview text, so the
+// client renders a label from `type` rather than showing a raw upload URL.
+function serializeReplyTo(replyTo) {
+  if (!replyTo) return null;
+  return {
+    id: replyTo.id,
+    content: replyTo.content,
+    senderId: replyTo.senderId,
+    senderName: replyTo.sender?.fullName ?? 'Unknown',
+    type: replyTo.type ?? 'text',
+  };
+}
+
 fastify.get('/api/v1/messages/health', async (request, reply) => {
   return { status: 'ok', service: 'messaging-service' };
 });
@@ -99,7 +127,7 @@ fastify.post('/api/v1/messages/:groupId/media', async (request, reply) => {
   // Persist to DB — store URL as content, type as 'image' or 'video'
   try {
     await prisma.message.create({
-      data: { id: messageId, tenantId, groupId, senderId: fields.senderId, content: fileUrl, createdAt: now },
+      data: { id: messageId, tenantId, groupId, senderId: fields.senderId, content: fileUrl, type: msgType, createdAt: now },
     });
   } catch (err) {
     fastify.log.error(`Failed to persist media message: ${err.message}`);
@@ -159,9 +187,13 @@ fastify.post('/api/v1/messages/:groupId', async (request, reply) => {
   const messageId = require('crypto').randomUUID();
   const now = new Date();
 
+  const resolvedReplyToId = await resolveReplyToId(replyToId, groupId);
+
+  let saved;
   try {
-    await prisma.message.create({
-      data: { id: messageId, tenantId, groupId, senderId, content, createdAt: now },
+    saved = await prisma.message.create({
+      data: { id: messageId, tenantId, groupId, senderId, content, replyToId: resolvedReplyToId, createdAt: now },
+      include: { replyTo: { include: { sender: { select: { fullName: true } } } } },
     });
   } catch (err) {
     fastify.log.error(`Failed to persist message (HTTP): ${err.message}`);
@@ -170,7 +202,9 @@ fastify.post('/api/v1/messages/:groupId', async (request, reply) => {
 
   const payload = {
     id: messageId, roomId: groupId, content, senderId, senderName,
-    tenantId, replyToId: replyToId || null, timestamp: now.toISOString(),
+    tenantId, replyToId: resolvedReplyToId, timestamp: now.toISOString(),
+    type: 'text',
+    replyTo: serializeReplyTo(saved.replyTo),
   };
 
   // Broadcast to all sockets in the room
@@ -194,7 +228,10 @@ fastify.get('/api/v1/messages/:groupId', async (request, reply) => {
     },
     orderBy: { createdAt: 'asc' },
     take: parseInt(limit),
-    include: { sender: { select: { fullName: true, avatarUrl: true } } },
+    include: {
+      sender: { select: { fullName: true, avatarUrl: true } },
+      replyTo: { include: { sender: { select: { fullName: true } } } },
+    },
   });
 
   return {
@@ -206,6 +243,8 @@ fastify.get('/api/v1/messages/:groupId', async (request, reply) => {
       senderAvatar: m.sender?.avatarUrl ?? null,
       timestamp: m.createdAt.toISOString(),
       type: m.type ?? 'text',
+      replyToId: m.replyToId ?? null,
+      replyTo: serializeReplyTo(m.replyTo),
     })),
   };
 });
@@ -246,6 +285,8 @@ const start = async () => {
           } catch (_) {}
         }
 
+        const resolvedReplyToId = await resolveReplyToId(replyToId, roomId);
+
         const messagePayload = {
           id: messageId,
           roomId,
@@ -253,7 +294,7 @@ const start = async () => {
           senderId,
           senderName,
           tenantId,
-          replyToId: replyToId || null,
+          replyToId: resolvedReplyToId,
           timestamp: now.toISOString(),
           createdAt: now,
         };
@@ -270,6 +311,7 @@ const start = async () => {
               groupId: roomId,
               senderId,
               content,
+              replyToId: resolvedReplyToId,
               createdAt: now,
             },
           });

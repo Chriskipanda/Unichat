@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -43,6 +44,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   Message? _replyingTo;
   io.Socket? _socket;
   io.Socket? _presenceSocket;
+  Timer? _typingClearTimer;   // receiver side: drops a stale "is typing…"
+  DateTime? _lastTypingEmit;  // sender side: throttles the typing event
 
   late AnimationController _typingCtrl;
   late List<Animation<double>> _dotAnims;
@@ -77,14 +80,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         final list = (data['messages'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-        final msgs = list.map((m) => Message(
-          id: m['id'] as String,
-          content: m['content'] as String,
-          senderId: m['senderId'] as String,
-          senderName: m['senderName'] as String? ?? 'Unknown',
-          timestamp: DateTime.tryParse(m['timestamp'] as String? ?? '') ?? DateTime.now(),
+        final msgs = list.map((m) => Message.fromJson(
+          m,
           status: m['senderId'] == widget.user.id ? MessageStatus.read : MessageStatus.delivered,
-          senderAvatar: m['senderAvatar'] as String?,
         )).toList();
         setState(() { _messages.clear(); _messages.addAll(msgs); _loadingHistory = false; });
         _scrollToBottom();
@@ -102,25 +100,42 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         'transports': ['websocket'], 'autoConnect': true,
         'extraHeaders': {'Authorization': 'Bearer ${widget.token}'},
       });
+      // Re-join on every connect, not just the first — a reconnect starts a new
+      // socket id with no room membership, which would silently stop delivery.
       _socket!.onConnect((_) => _socket!.emit('join_room', widget.roomId));
       _socket!.on('new_message', (data) {
         if (!mounted) return;
         final msg = Message.fromSocket(Map<String, dynamic>.from(data));
-        if (msg.senderId != widget.user.id) { setState(() => _messages.add(msg)); _scrollToBottom(); }
+        if (msg.senderId == widget.user.id) return; // our own echo — already shown optimistically
+        if (_messages.any((m) => m.id == msg.id)) return; // duplicate after reconnect/history overlap
+        setState(() => _messages.add(msg));
+        _scrollToBottom();
       });
       _presenceSocket = io.io('http://${Config.baseUrl}', <String, dynamic>{
         'transports': ['websocket'], 'autoConnect': true, 'path': '/presence/',
         'query': {'userId': widget.user.id, 'tenantId': widget.user.tenant['id']},
       });
+      // Presence relays typing with socket.to(roomId), so this socket must be a
+      // member of the room to receive anything.
+      _presenceSocket!.onConnect((_) => _presenceSocket!.emit('join_room', widget.roomId));
       _presenceSocket!.on('user_typing', (data) {
         final d = Map<String, dynamic>.from(data);
         if (d['roomId'] == widget.roomId && d['userId'] != widget.user.id) {
           if (mounted) setState(() => _typingUser = d['userName'] ?? 'Someone');
+          // Fail-safe: if the sender goes offline mid-typing its stop_typing
+          // never arrives, which would strand the indicator on screen forever.
+          _typingClearTimer?.cancel();
+          _typingClearTimer = Timer(const Duration(seconds: 5), () {
+            if (mounted) setState(() => _typingUser = '');
+          });
         }
       });
       _presenceSocket!.on('user_stop_typing', (data) {
         final d = Map<String, dynamic>.from(data);
-        if (d['roomId'] == widget.roomId && mounted) setState(() => _typingUser = '');
+        if (d['roomId'] == widget.roomId && mounted) {
+          _typingClearTimer?.cancel();
+          setState(() => _typingUser = '');
+        }
       });
     } catch (_) {}
   }
@@ -142,8 +157,17 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _isTyping = text.isNotEmpty;
     if (_isTyping != wasTyping) setState(() {});
     if (_isTyping) {
+      // One event per keystroke would flood the socket; the peer clears the
+      // indicator after 5s of silence, so re-announcing every 2s holds it up
+      // while typing and lets it lapse naturally on a pause.
+      final now = DateTime.now();
+      final due = _lastTypingEmit == null ||
+          now.difference(_lastTypingEmit!) > const Duration(seconds: 2);
+      if (!due) return;
+      _lastTypingEmit = now;
       _presenceSocket?.emit('typing', {'roomId': widget.roomId, 'userId': widget.user.id, 'userName': widget.user.fullName});
     } else {
+      _lastTypingEmit = null;
       _presenceSocket?.emit('stop_typing', {'roomId': widget.roomId, 'userId': widget.user.id});
     }
   }
@@ -160,6 +184,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     setState(() { _messages.add(msg); _replyingTo = null; _isTyping = false; });
     _msgCtrl.clear();
     _scrollToBottom(animated: true);
+    _lastTypingEmit = null;
     _presenceSocket?.emit('stop_typing', {'roomId': widget.roomId, 'userId': widget.user.id});
     _sendViaHttp(msg, replyTo);
   }
@@ -185,6 +210,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
       if (!mounted) return;
       if (res.statusCode == 201) {
+        // Adopt the server's UUID — replying to or deleting this message sends
+        // the id back, and the temporary local one would be rejected.
+        final serverId = (jsonDecode(res.body)['message'] as Map?)?['id'] as String?;
+        if (serverId != null) msg.id = serverId;
         setState(() => msg.status = MessageStatus.sent);
         await Future.delayed(const Duration(seconds: 1));
         if (mounted) setState(() => msg.status = MessageStatus.delivered);
@@ -264,10 +293,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         // Parse the response to get the served URL and update the bubble
         final body = await streamed.stream.bytesToString();
         final decoded = jsonDecode(body) as Map<String, dynamic>;
-        final relativeUrl = (decoded['message'] as Map?)?['content'] as String?;
+        final sent = decoded['message'] as Map?;
+        final relativeUrl = sent?['content'] as String?;
         if (relativeUrl != null) {
           msg.imageUrl = '$baseUrl$relativeUrl';
         }
+        final serverId = sent?['id'] as String?;
+        if (serverId != null) msg.id = serverId;
         setState(() => msg.status = MessageStatus.sent);
         await Future.delayed(const Duration(seconds: 1));
         if (mounted) setState(() => msg.status = MessageStatus.delivered);
@@ -363,6 +395,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     _msgCtrl.dispose(); _scrollCtrl.dispose(); _typingCtrl.dispose();
+    _typingClearTimer?.cancel();
+    // Tell the peer we stopped typing before the socket drops, otherwise their
+    // indicator hangs until its own timeout fires.
+    _presenceSocket?.emit('stop_typing', {'roomId': widget.roomId, 'userId': widget.user.id});
     _socket?.disconnect(); _presenceSocket?.disconnect();
     super.dispose();
   }

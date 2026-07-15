@@ -22,6 +22,16 @@ const start = async () => {
         console.log(`User ${userId} is online`);
       }
 
+      // Typing events are relayed with socket.to(roomId), which only reaches
+      // sockets that have joined that room — so clients must join first.
+      socket.on('join_room', (roomId) => {
+        if (roomId) socket.join(roomId);
+      });
+
+      socket.on('leave_room', (roomId) => {
+        if (roomId) socket.leave(roomId);
+      });
+
       // Handle Typing Indicator
       socket.on('typing', (data) => {
         const { roomId, userId, userName } = data;

@@ -74,6 +74,10 @@ services:
     build:
       context: ./services/messaging-service
     container_name: unichat-messaging-service
+    # Chat attachments live on disk while their URLs live in the DB — without
+    # this mount a rebuild wipes every image and leaves the rows dangling.
+    volumes:
+      - ./services/messaging-service/uploads:/app/uploads
     environment:
       PORT: 3002
       DATABASE_URL: postgresql://unichat_admin:unichat_password@postgres:5432/unichat_db
