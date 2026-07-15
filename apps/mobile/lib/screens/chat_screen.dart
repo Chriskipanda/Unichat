@@ -11,6 +11,7 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../config.dart';
 import '../models/models.dart';
 import '../services/chat_cache.dart';
+import '../services/outbox.dart';
 import '../widgets/attachment_sheet.dart';
 import '../widgets/chat_wallpaper.dart';
 
@@ -118,6 +119,31 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         _isOffline = true;
       });
     }
+
+    await _restorePending();
+  }
+
+  /// Re-attach messages still waiting to send. History comes from the server so
+  /// it can't contain them, and dropping them here would make a queued message
+  /// look lost every time the user reopened the chat.
+  Future<void> _restorePending() async {
+    final pending = await Outbox.pendingFor(widget.roomId);
+    if (!mounted || pending.isEmpty) return;
+    setState(() {
+      for (final p in pending) {
+        if (_messages.any((m) => m.id == p.tempId)) continue;
+        _messages.add(Message(
+          id: p.tempId,
+          content: p.content,
+          senderId: p.senderId,
+          senderName: p.senderName,
+          timestamp: p.createdAt,
+          status: MessageStatus.sending,
+        ));
+      }
+      _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    });
+    _scrollToBottom();
   }
 
   Message _messageFrom(Map<String, dynamic> json) => Message.fromJson(
@@ -135,7 +161,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       });
       // Re-join on every connect, not just the first — a reconnect starts a new
       // socket id with no room membership, which would silently stop delivery.
-      _socket!.onConnect((_) => _socket!.emit('join_room', widget.roomId));
+      // A connect is also the earliest reliable sign the network is back, so
+      // it's when queued messages get another chance.
+      _socket!.onConnect((_) {
+        _socket!.emit('join_room', widget.roomId);
+        _flushOutbox();
+      });
       _socket!.on('new_message', (data) {
         if (!mounted) return;
         final raw = Map<String, dynamic>.from(data);
@@ -256,8 +287,44 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         if (mounted) setState(() => msg.status = MessageStatus.delivered);
       }
     } catch (_) {
-      // Message stays in "sending" state — user can see it didn't go through
+      // No network. Persist it so it survives leaving the screen or killing the
+      // app, and send it when the connection comes back.
+      await Outbox.enqueue(PendingMessage(
+        tempId: msg.id,
+        roomId: widget.roomId,
+        content: msg.content,
+        senderId: widget.user.id,
+        senderName: widget.user.fullName,
+        tenantId: widget.user.tenant['id']?.toString(),
+        replyToId: replyTo?.id,
+        createdAt: msg.timestamp,
+      ));
+      if (mounted) setState(() { msg.status = MessageStatus.sending; _isOffline = true; });
     }
+  }
+
+  /// Deliver anything queued for this room and reconcile it with what's on
+  /// screen. Safe to call repeatedly — the queue is the source of truth.
+  Future<void> _flushOutbox() async {
+    if (!await Outbox.hasPending()) return;
+    final result = await Outbox.flush(widget.token);
+    if (!mounted) return;
+
+    for (final entry in result.sent.entries) {
+      // Resolve to a concrete element up front: adopting the server id below
+      // changes the very field a lazy `where` matches on, so re-reading it
+      // would find nothing.
+      final index = _messages.indexWhere((m) => m.id == entry.key);
+      if (index == -1) continue;
+      final delivered = _messages[index];
+      final serverId = entry.value['id'] as String?;
+      setState(() {
+        if (serverId != null) delivered.id = serverId;
+        delivered.status = MessageStatus.sent;
+      });
+      await ChatCache.appendMessage(widget.roomId, entry.value);
+    }
+    if (mounted && !result.stillOffline) setState(() => _isOffline = false);
   }
 
   // ── Attachment handlers ────────────────────────────────────────────────────
@@ -753,10 +820,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   Widget _buildStatusIcon(MessageStatus status) {
     switch (status) {
       case MessageStatus.sending:
-        return const SizedBox(
-          width: 12, height: 12,
-          child: CircularProgressIndicator(color: Colors.black38, strokeWidth: 1.5),
-        );
+        // A clock, not a spinner: a queued message may sit here for hours until
+        // the network returns, and a spinner would promise it's on its way.
+        return const Icon(Icons.schedule_rounded, size: 14, color: Colors.black38);
       case MessageStatus.sent:
         return const Icon(Icons.check, size: 15, color: Colors.black38);
       case MessageStatus.delivered:
@@ -769,10 +835,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   Widget _buildStatusIconOnImage(MessageStatus status) {
     switch (status) {
       case MessageStatus.sending:
-        return const SizedBox(
-          width: 12, height: 12,
-          child: CircularProgressIndicator(color: Colors.white70, strokeWidth: 1.5),
-        );
+        return const Icon(Icons.schedule_rounded, size: 14, color: Colors.white70);
       case MessageStatus.sent:
         return const Icon(Icons.check, size: 15, color: Colors.white70);
       case MessageStatus.delivered:
