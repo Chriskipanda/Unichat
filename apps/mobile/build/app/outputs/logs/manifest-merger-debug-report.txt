@@ -1,0 +1,417 @@
+-- Merging decision tree log ---
+application
+INJECTED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:10:5-41:19
+INJECTED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\debug\AndroidManifest.xml
+MERGED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:8:5-32:19
+MERGED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:8:5-32:19
+MERGED from [androidx.window:window:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\de9d43518d385bf6ee600243629f4bd2\transformed\window-1.2.0\AndroidManifest.xml:22:5-29:19
+MERGED from [androidx.window:window:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\de9d43518d385bf6ee600243629f4bd2\transformed\window-1.2.0\AndroidManifest.xml:22:5-29:19
+MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7eef7391c05db3d5b811b9f2991458eb\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7eef7391c05db3d5b811b9f2991458eb\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:28:5-89
+MERGED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:28:5-89
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:23:5-53:19
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:23:5-53:19
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\5cd90858158b615f75713f713fbd10ac\transformed\startup-runtime-1.1.1\AndroidManifest.xml:25:5-31:19
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\5cd90858158b615f75713f713fbd10ac\transformed\startup-runtime-1.1.1\AndroidManifest.xml:25:5-31:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7a23c7f3cf3f4eae4848f832da3bc6b4\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:24:5-25:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7a23c7f3cf3f4eae4848f832da3bc6b4\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:24:5-25:19
+	android:extractNativeLibs
+		INJECTED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\debug\AndroidManifest.xml
+	android:appComponentFactory
+		ADDED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:28:18-86
+	android:name
+		INJECTED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml
+manifest
+ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:1:1-53:12
+MERGED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:1:1-53:12
+INJECTED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\debug\AndroidManifest.xml:1:1-7:12
+INJECTED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\debug\AndroidManifest.xml:1:1-7:12
+INJECTED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\debug\AndroidManifest.xml:1:1-7:12
+MERGED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:2:1-34:12
+MERGED from [:flutter_plugin_android_lifecycle] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\flutter_plugin_android_lifecycle\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:2:1-7:12
+MERGED from [:jni_flutter] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\jni_flutter\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:2:1-7:12
+MERGED from [:jni] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\jni\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:2:1-7:12
+MERGED from [:photo_manager] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\photo_manager\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:2:1-11:12
+MERGED from [:shared_preferences_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\shared_preferences_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.preference:preference:1.2.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\28f54c546fc78ebb37db66a456d6a5b7\transformed\preference-1.2.1\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.recyclerview:recyclerview:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\c1fa653c7756d56d704f85dc6997818a\transformed\recyclerview-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.legacy:legacy-support-core-ui:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\2c1dcdbe6460683c9b8aca164fa5c9b0\transformed\legacy-support-core-ui-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.slidingpanelayout:slidingpanelayout:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\db8462b1edec8cbf0cd0f627e82b9b2b\transformed\slidingpanelayout-1.2.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.window:window:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\de9d43518d385bf6ee600243629f4bd2\transformed\window-1.2.0\AndroidManifest.xml:17:1-31:12
+MERGED from [androidx.window:window-java:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\58f5f2631b403ee459540ed075ca94de\transformed\window-java-1.2.0\AndroidManifest.xml:17:1-21:12
+MERGED from [com.github.bumptech.glide:glide:4.16.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\c6bdcfdd145d6f1f6d21856fd7a5c9f2\transformed\glide-4.16.0\AndroidManifest.xml:2:1-9:12
+MERGED from [androidx.appcompat:appcompat:1.1.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\dada052338995c83147ddb9f506a2294\transformed\appcompat-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.fragment:fragment-ktx:1.7.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\bcb06324b285c4d4dc646a19d5ff5643\transformed\fragment-ktx-1.7.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.fragment:fragment:1.7.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\cdd2c2bbc5eadd17f09e1e95ed5ee203\transformed\fragment-1.7.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.activity:activity-ktx:1.12.4] C:\Users\Blackbird\.gradle\caches\8.14\transforms\e69246167badd61324e7b849efeef1db\transformed\activity-ktx-1.12.4\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.activity:activity:1.12.4] C:\Users\Blackbird\.gradle\caches\8.14\transforms\5414ccc039fb4f8f4bde9b73dbc774e7\transformed\activity-1.12.4\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3fc0bdf4dfc0d32b949e0ea8a6520bef\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.loader:loader:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\637bc852adb066040c29d0ba2b39fe68\transformed\loader-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\944741676fef247baedff9dadd2d2c1c\transformed\lifecycle-livedata-2.7.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\9fca525d3bf220305fa487de5d9f0f26\transformed\lifecycle-livedata-core-ktx-2.7.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\bff4ebab4988622a176db7680ce64bfc\transformed\lifecycle-viewmodel-ktx-2.7.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-runtime-ktx:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\a0b336dbdc4fd3b95a6404b212d3dc16\transformed\lifecycle-runtime-ktx-2.7.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\9581cf3051cf11d63f8eec2958b195b6\transformed\lifecycle-livedata-core-2.7.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3e5615732ace3c59dabeae5b9cdc6d87\transformed\lifecycle-viewmodel-2.7.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\1df6938e5cd8a4cc875a2061e7b55f6d\transformed\lifecycle-runtime-2.7.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7eef7391c05db3d5b811b9f2991458eb\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:17:1-35:12
+MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\0d1a4e943e1f2388bec76a4b91076096\transformed\savedstate-ktx-1.2.1\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\0214bdf1acea6be2178e137a5ddbe1e6\transformed\savedstate-1.2.1\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\2b6a6fd2e9f2f54bc3654b22e5ece027\transformed\lifecycle-viewmodel-savedstate-2.7.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.core:core-ktx:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\114e1f47e26513b9750011460cadadf7\transformed\core-ktx-1.18.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\e9d021282082a6e960547e5563d60a0b\transformed\viewpager-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.appcompat:appcompat-resources:1.1.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6fc7a072505296a9b361aba6f9f54f8f\transformed\appcompat-resources-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3de1a5a7f865f0ba76923d3b4138e649\transformed\vectordrawable-animated-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\bce1d15c51f9d927634d1add208e68ca\transformed\vectordrawable-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\1e0eba0ef0100fcfa7ea5da16114e74e\transformed\drawerlayout-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\243e67dbdb61e5fad20f6042c5827f3b\transformed\coordinatorlayout-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.customview:customview:1.1.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\2c37f19268a04879bdc08c9c262375c2\transformed\customview-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.transition:transition:1.4.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3d15e39a4500391bafe70c0facca9a0c\transformed\transition-1.4.1\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.swiperefreshlayout:swiperefreshlayout:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\1c387d7504d780e4a8d718a2c7566fc7\transformed\swiperefreshlayout-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.asynclayoutinflater:asynclayoutinflater:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\9d850334ad9a9fa919edda5e63ca1029\transformed\asynclayoutinflater-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:17:1-30:12
+MERGED from [androidx.exifinterface:exifinterface:1.4.2] C:\Users\Blackbird\.gradle\caches\8.14\transforms\0b4ba80d461f31bc5308adca0aa166f2\transformed\exifinterface-1.4.2\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:17:1-55:12
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\5cd90858158b615f75713f713fbd10ac\transformed\startup-runtime-1.1.1\AndroidManifest.xml:17:1-33:12
+MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\8ab60bc1f9d82dda68a0e3c973b6cd9f\transformed\tracing-1.2.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\a0ca2361246f9466c14c65ea672ece91\transformed\interpolator-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7a23c7f3cf3f4eae4848f832da3bc6b4\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:17:1-27:12
+MERGED from [com.github.bumptech.glide:gifdecoder:4.16.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\2aa600c22499477e342a13855bc5cbeb\transformed\gifdecoder-4.16.0\AndroidManifest.xml:2:1-9:12
+MERGED from [androidx.datastore:datastore-preferences-core-android:1.1.7] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7bdaa0dc9680936d1cb5e786858ee6a5\transformed\datastore-preferences-core-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.datastore:datastore-core-android:1.1.7] C:\Users\Blackbird\.gradle\caches\8.14\transforms\112e9d9aa5f042241d044f586f9c061f\transformed\datastore-core-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.datastore:datastore-preferences-android:1.1.7] C:\Users\Blackbird\.gradle\caches\8.14\transforms\eb02108717d20c79c952c6e0724e59da\transformed\datastore-preferences-release\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.datastore:datastore-android:1.1.7] C:\Users\Blackbird\.gradle\caches\8.14\transforms\90fe3c5dae2961f9327590585ca040d6\transformed\datastore-release\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\8b7a8b3b74635bcaec399d810db5f329\transformed\core-runtime-2.2.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.navigationevent:navigationevent-android:1.0.2] C:\Users\Blackbird\.gradle\caches\8.14\transforms\9b018ad9462f0fa31de1efa9bcb6152a\transformed\navigationevent\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\b5eb603945ed4c3b237cf7d5d5f14ec7\transformed\cursoradapter-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.window.extensions.core:core:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\722761b5b2ffff8889e45bdefda5f133\transformed\core-1.0.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\5116f0a18a5eada7c5cb275aed5c634a\transformed\documentfile-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3b9535a63ef71807df54cef0a5a0679a\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.print:print:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7a64287ad06a310dd1654b8dd57b1de4\transformed\print-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7b33881451a61108b3d270c2908203e9\transformed\annotation-experimental-1.4.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.core:core-viewtree:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\84723c4914b1a1cee7fb1cb5a97be650\transformed\core-viewtree-1.0.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.runtime:runtime-annotation-android:1.9.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\05eb34139a4dd8a492953e7db0020ef3\transformed\runtime-annotation\AndroidManifest.xml:2:1-7:12
+MERGED from [com.getkeepsafe.relinker:relinker:1.4.5] C:\Users\Blackbird\.gradle\caches\8.14\transforms\8d310b6da207e40492d385c9c54f7340\transformed\relinker-1.4.5\AndroidManifest.xml:2:1-7:12
+	package
+		INJECTED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\debug\AndroidManifest.xml
+	android:versionName
+		INJECTED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\debug\AndroidManifest.xml
+	android:versionCode
+		INJECTED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\debug\AndroidManifest.xml
+	xmlns:android
+		ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:1:11-69
+uses-permission#android.permission.CAMERA
+ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:3:5-64
+	android:name
+		ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:3:22-62
+uses-permission#android.permission.READ_MEDIA_IMAGES
+ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:4:5-75
+	android:name
+		ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:4:22-73
+uses-permission#android.permission.READ_MEDIA_VIDEO
+ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:5:5-74
+	android:name
+		ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:5:22-72
+uses-permission#android.permission.READ_EXTERNAL_STORAGE
+ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:6:5-106
+MERGED from [:photo_manager] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\photo_manager\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:7:5-9:38
+MERGED from [:photo_manager] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\photo_manager\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:7:5-9:38
+	android:maxSdkVersion
+		ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:6:78-104
+	android:name
+		ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:6:22-77
+uses-permission#android.permission.WRITE_EXTERNAL_STORAGE
+ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:7:5-107
+	android:maxSdkVersion
+		ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:7:79-105
+	android:name
+		ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:7:22-78
+uses-permission#android.permission.INTERNET
+ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:8:5-66
+MERGED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:8:5-66
+MERGED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:8:5-66
+	android:name
+		ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:8:22-64
+queries
+ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:47:5-52:15
+intent#action:name:android.intent.action.PROCESS_TEXT+data:mimeType:text/plain
+ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:48:9-51:18
+action#android.intent.action.PROCESS_TEXT
+ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:49:13-72
+	android:name
+		ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:49:21-70
+data
+ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:50:13-50
+	android:mimeType
+		ADDED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\main\AndroidManifest.xml:50:19-48
+uses-sdk
+INJECTED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\debug\AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\debug\AndroidManifest.xml
+INJECTED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\debug\AndroidManifest.xml
+MERGED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:6:5-44
+MERGED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:6:5-44
+MERGED from [:flutter_plugin_android_lifecycle] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\flutter_plugin_android_lifecycle\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:5:5-44
+MERGED from [:flutter_plugin_android_lifecycle] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\flutter_plugin_android_lifecycle\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:5:5-44
+MERGED from [:jni_flutter] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\jni_flutter\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:5:5-44
+MERGED from [:jni_flutter] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\jni_flutter\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:5:5-44
+MERGED from [:jni] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\jni\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:5:5-44
+MERGED from [:jni] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\jni\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:5:5-44
+MERGED from [:photo_manager] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\photo_manager\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:5:5-44
+MERGED from [:photo_manager] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\photo_manager\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:5:5-44
+MERGED from [:shared_preferences_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\shared_preferences_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:5:5-44
+MERGED from [:shared_preferences_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\shared_preferences_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:5:5-44
+MERGED from [androidx.preference:preference:1.2.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\28f54c546fc78ebb37db66a456d6a5b7\transformed\preference-1.2.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.preference:preference:1.2.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\28f54c546fc78ebb37db66a456d6a5b7\transformed\preference-1.2.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.recyclerview:recyclerview:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\c1fa653c7756d56d704f85dc6997818a\transformed\recyclerview-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.recyclerview:recyclerview:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\c1fa653c7756d56d704f85dc6997818a\transformed\recyclerview-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-ui:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\2c1dcdbe6460683c9b8aca164fa5c9b0\transformed\legacy-support-core-ui-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-ui:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\2c1dcdbe6460683c9b8aca164fa5c9b0\transformed\legacy-support-core-ui-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.slidingpanelayout:slidingpanelayout:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\db8462b1edec8cbf0cd0f627e82b9b2b\transformed\slidingpanelayout-1.2.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.slidingpanelayout:slidingpanelayout:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\db8462b1edec8cbf0cd0f627e82b9b2b\transformed\slidingpanelayout-1.2.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.window:window:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\de9d43518d385bf6ee600243629f4bd2\transformed\window-1.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.window:window:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\de9d43518d385bf6ee600243629f4bd2\transformed\window-1.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.window:window-java:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\58f5f2631b403ee459540ed075ca94de\transformed\window-java-1.2.0\AndroidManifest.xml:19:5-44
+MERGED from [androidx.window:window-java:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\58f5f2631b403ee459540ed075ca94de\transformed\window-java-1.2.0\AndroidManifest.xml:19:5-44
+MERGED from [com.github.bumptech.glide:glide:4.16.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\c6bdcfdd145d6f1f6d21856fd7a5c9f2\transformed\glide-4.16.0\AndroidManifest.xml:5:5-7:41
+MERGED from [com.github.bumptech.glide:glide:4.16.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\c6bdcfdd145d6f1f6d21856fd7a5c9f2\transformed\glide-4.16.0\AndroidManifest.xml:5:5-7:41
+MERGED from [androidx.appcompat:appcompat:1.1.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\dada052338995c83147ddb9f506a2294\transformed\appcompat-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.appcompat:appcompat:1.1.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\dada052338995c83147ddb9f506a2294\transformed\appcompat-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.fragment:fragment-ktx:1.7.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\bcb06324b285c4d4dc646a19d5ff5643\transformed\fragment-ktx-1.7.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.fragment:fragment-ktx:1.7.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\bcb06324b285c4d4dc646a19d5ff5643\transformed\fragment-ktx-1.7.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.fragment:fragment:1.7.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\cdd2c2bbc5eadd17f09e1e95ed5ee203\transformed\fragment-1.7.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.fragment:fragment:1.7.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\cdd2c2bbc5eadd17f09e1e95ed5ee203\transformed\fragment-1.7.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity-ktx:1.12.4] C:\Users\Blackbird\.gradle\caches\8.14\transforms\e69246167badd61324e7b849efeef1db\transformed\activity-ktx-1.12.4\AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity-ktx:1.12.4] C:\Users\Blackbird\.gradle\caches\8.14\transforms\e69246167badd61324e7b849efeef1db\transformed\activity-ktx-1.12.4\AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity:1.12.4] C:\Users\Blackbird\.gradle\caches\8.14\transforms\5414ccc039fb4f8f4bde9b73dbc774e7\transformed\activity-1.12.4\AndroidManifest.xml:20:5-44
+MERGED from [androidx.activity:activity:1.12.4] C:\Users\Blackbird\.gradle\caches\8.14\transforms\5414ccc039fb4f8f4bde9b73dbc774e7\transformed\activity-1.12.4\AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3fc0bdf4dfc0d32b949e0ea8a6520bef\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3fc0bdf4dfc0d32b949e0ea8a6520bef\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.loader:loader:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\637bc852adb066040c29d0ba2b39fe68\transformed\loader-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.loader:loader:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\637bc852adb066040c29d0ba2b39fe68\transformed\loader-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\944741676fef247baedff9dadd2d2c1c\transformed\lifecycle-livedata-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\944741676fef247baedff9dadd2d2c1c\transformed\lifecycle-livedata-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\9fca525d3bf220305fa487de5d9f0f26\transformed\lifecycle-livedata-core-ktx-2.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\9fca525d3bf220305fa487de5d9f0f26\transformed\lifecycle-livedata-core-ktx-2.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\bff4ebab4988622a176db7680ce64bfc\transformed\lifecycle-viewmodel-ktx-2.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\bff4ebab4988622a176db7680ce64bfc\transformed\lifecycle-viewmodel-ktx-2.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-ktx:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\a0b336dbdc4fd3b95a6404b212d3dc16\transformed\lifecycle-runtime-ktx-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-ktx:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\a0b336dbdc4fd3b95a6404b212d3dc16\transformed\lifecycle-runtime-ktx-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\9581cf3051cf11d63f8eec2958b195b6\transformed\lifecycle-livedata-core-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\9581cf3051cf11d63f8eec2958b195b6\transformed\lifecycle-livedata-core-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3e5615732ace3c59dabeae5b9cdc6d87\transformed\lifecycle-viewmodel-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3e5615732ace3c59dabeae5b9cdc6d87\transformed\lifecycle-viewmodel-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\1df6938e5cd8a4cc875a2061e7b55f6d\transformed\lifecycle-runtime-2.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\1df6938e5cd8a4cc875a2061e7b55f6d\transformed\lifecycle-runtime-2.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7eef7391c05db3d5b811b9f2991458eb\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7eef7391c05db3d5b811b9f2991458eb\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\0d1a4e943e1f2388bec76a4b91076096\transformed\savedstate-ktx-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\0d1a4e943e1f2388bec76a4b91076096\transformed\savedstate-ktx-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\0214bdf1acea6be2178e137a5ddbe1e6\transformed\savedstate-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\0214bdf1acea6be2178e137a5ddbe1e6\transformed\savedstate-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\2b6a6fd2e9f2f54bc3654b22e5ece027\transformed\lifecycle-viewmodel-savedstate-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\2b6a6fd2e9f2f54bc3654b22e5ece027\transformed\lifecycle-viewmodel-savedstate-2.7.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core-ktx:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\114e1f47e26513b9750011460cadadf7\transformed\core-ktx-1.18.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-ktx:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\114e1f47e26513b9750011460cadadf7\transformed\core-ktx-1.18.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\e9d021282082a6e960547e5563d60a0b\transformed\viewpager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\e9d021282082a6e960547e5563d60a0b\transformed\viewpager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.appcompat:appcompat-resources:1.1.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6fc7a072505296a9b361aba6f9f54f8f\transformed\appcompat-resources-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.appcompat:appcompat-resources:1.1.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6fc7a072505296a9b361aba6f9f54f8f\transformed\appcompat-resources-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3de1a5a7f865f0ba76923d3b4138e649\transformed\vectordrawable-animated-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3de1a5a7f865f0ba76923d3b4138e649\transformed\vectordrawable-animated-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\bce1d15c51f9d927634d1add208e68ca\transformed\vectordrawable-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\bce1d15c51f9d927634d1add208e68ca\transformed\vectordrawable-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\1e0eba0ef0100fcfa7ea5da16114e74e\transformed\drawerlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\1e0eba0ef0100fcfa7ea5da16114e74e\transformed\drawerlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\243e67dbdb61e5fad20f6042c5827f3b\transformed\coordinatorlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\243e67dbdb61e5fad20f6042c5827f3b\transformed\coordinatorlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.customview:customview:1.1.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\2c37f19268a04879bdc08c9c262375c2\transformed\customview-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.customview:customview:1.1.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\2c37f19268a04879bdc08c9c262375c2\transformed\customview-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.transition:transition:1.4.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3d15e39a4500391bafe70c0facca9a0c\transformed\transition-1.4.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.transition:transition:1.4.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3d15e39a4500391bafe70c0facca9a0c\transformed\transition-1.4.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.swiperefreshlayout:swiperefreshlayout:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\1c387d7504d780e4a8d718a2c7566fc7\transformed\swiperefreshlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.swiperefreshlayout:swiperefreshlayout:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\1c387d7504d780e4a8d718a2c7566fc7\transformed\swiperefreshlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.asynclayoutinflater:asynclayoutinflater:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\9d850334ad9a9fa919edda5e63ca1029\transformed\asynclayoutinflater-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.asynclayoutinflater:asynclayoutinflater:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\9d850334ad9a9fa919edda5e63ca1029\transformed\asynclayoutinflater-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.exifinterface:exifinterface:1.4.2] C:\Users\Blackbird\.gradle\caches\8.14\transforms\0b4ba80d461f31bc5308adca0aa166f2\transformed\exifinterface-1.4.2\AndroidManifest.xml:5:5-44
+MERGED from [androidx.exifinterface:exifinterface:1.4.2] C:\Users\Blackbird\.gradle\caches\8.14\transforms\0b4ba80d461f31bc5308adca0aa166f2\transformed\exifinterface-1.4.2\AndroidManifest.xml:5:5-44
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\5cd90858158b615f75713f713fbd10ac\transformed\startup-runtime-1.1.1\AndroidManifest.xml:21:5-23:41
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\5cd90858158b615f75713f713fbd10ac\transformed\startup-runtime-1.1.1\AndroidManifest.xml:21:5-23:41
+MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\8ab60bc1f9d82dda68a0e3c973b6cd9f\transformed\tracing-1.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\8ab60bc1f9d82dda68a0e3c973b6cd9f\transformed\tracing-1.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\a0ca2361246f9466c14c65ea672ece91\transformed\interpolator-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\a0ca2361246f9466c14c65ea672ece91\transformed\interpolator-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7a23c7f3cf3f4eae4848f832da3bc6b4\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7a23c7f3cf3f4eae4848f832da3bc6b4\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:20:5-22:41
+MERGED from [com.github.bumptech.glide:gifdecoder:4.16.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\2aa600c22499477e342a13855bc5cbeb\transformed\gifdecoder-4.16.0\AndroidManifest.xml:5:5-7:41
+MERGED from [com.github.bumptech.glide:gifdecoder:4.16.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\2aa600c22499477e342a13855bc5cbeb\transformed\gifdecoder-4.16.0\AndroidManifest.xml:5:5-7:41
+MERGED from [androidx.datastore:datastore-preferences-core-android:1.1.7] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7bdaa0dc9680936d1cb5e786858ee6a5\transformed\datastore-preferences-core-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.datastore:datastore-preferences-core-android:1.1.7] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7bdaa0dc9680936d1cb5e786858ee6a5\transformed\datastore-preferences-core-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.datastore:datastore-core-android:1.1.7] C:\Users\Blackbird\.gradle\caches\8.14\transforms\112e9d9aa5f042241d044f586f9c061f\transformed\datastore-core-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.datastore:datastore-core-android:1.1.7] C:\Users\Blackbird\.gradle\caches\8.14\transforms\112e9d9aa5f042241d044f586f9c061f\transformed\datastore-core-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.datastore:datastore-preferences-android:1.1.7] C:\Users\Blackbird\.gradle\caches\8.14\transforms\eb02108717d20c79c952c6e0724e59da\transformed\datastore-preferences-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-preferences-android:1.1.7] C:\Users\Blackbird\.gradle\caches\8.14\transforms\eb02108717d20c79c952c6e0724e59da\transformed\datastore-preferences-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-android:1.1.7] C:\Users\Blackbird\.gradle\caches\8.14\transforms\90fe3c5dae2961f9327590585ca040d6\transformed\datastore-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-android:1.1.7] C:\Users\Blackbird\.gradle\caches\8.14\transforms\90fe3c5dae2961f9327590585ca040d6\transformed\datastore-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\8b7a8b3b74635bcaec399d810db5f329\transformed\core-runtime-2.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\8b7a8b3b74635bcaec399d810db5f329\transformed\core-runtime-2.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.navigationevent:navigationevent-android:1.0.2] C:\Users\Blackbird\.gradle\caches\8.14\transforms\9b018ad9462f0fa31de1efa9bcb6152a\transformed\navigationevent\AndroidManifest.xml:5:5-44
+MERGED from [androidx.navigationevent:navigationevent-android:1.0.2] C:\Users\Blackbird\.gradle\caches\8.14\transforms\9b018ad9462f0fa31de1efa9bcb6152a\transformed\navigationevent\AndroidManifest.xml:5:5-44
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\b5eb603945ed4c3b237cf7d5d5f14ec7\transformed\cursoradapter-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\b5eb603945ed4c3b237cf7d5d5f14ec7\transformed\cursoradapter-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.window.extensions.core:core:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\722761b5b2ffff8889e45bdefda5f133\transformed\core-1.0.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.window.extensions.core:core:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\722761b5b2ffff8889e45bdefda5f133\transformed\core-1.0.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\5116f0a18a5eada7c5cb275aed5c634a\transformed\documentfile-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\5116f0a18a5eada7c5cb275aed5c634a\transformed\documentfile-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3b9535a63ef71807df54cef0a5a0679a\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3b9535a63ef71807df54cef0a5a0679a\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.print:print:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7a64287ad06a310dd1654b8dd57b1de4\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.print:print:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7a64287ad06a310dd1654b8dd57b1de4\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7b33881451a61108b3d270c2908203e9\transformed\annotation-experimental-1.4.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7b33881451a61108b3d270c2908203e9\transformed\annotation-experimental-1.4.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-viewtree:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\84723c4914b1a1cee7fb1cb5a97be650\transformed\core-viewtree-1.0.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-viewtree:1.0.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\84723c4914b1a1cee7fb1cb5a97be650\transformed\core-viewtree-1.0.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-annotation-android:1.9.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\05eb34139a4dd8a492953e7db0020ef3\transformed\runtime-annotation\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-annotation-android:1.9.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\05eb34139a4dd8a492953e7db0020ef3\transformed\runtime-annotation\AndroidManifest.xml:5:5-44
+MERGED from [com.getkeepsafe.relinker:relinker:1.4.5] C:\Users\Blackbird\.gradle\caches\8.14\transforms\8d310b6da207e40492d385c9c54f7340\transformed\relinker-1.4.5\AndroidManifest.xml:5:5-43
+MERGED from [com.getkeepsafe.relinker:relinker:1.4.5] C:\Users\Blackbird\.gradle\caches\8.14\transforms\8d310b6da207e40492d385c9c54f7340\transformed\relinker-1.4.5\AndroidManifest.xml:5:5-43
+	android:targetSdkVersion
+		INJECTED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\debug\AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\android\app\src\debug\AndroidManifest.xml
+provider#io.flutter.plugins.imagepicker.ImagePickerFileProvider
+ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:9:9-17:20
+	android:grantUriPermissions
+		ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:13:13-47
+	android:authorities
+		ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:11:13-74
+	android:exported
+		ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:13-37
+	android:name
+		ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:10:13-82
+meta-data#android.support.FILE_PROVIDER_PATHS
+ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:14:13-16:75
+	android:resource
+		ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:16:17-72
+	android:name
+		ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:15:17-67
+service#com.google.android.gms.metadata.ModuleDependencies
+ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:19:9-31:19
+	android:enabled
+		ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:21:13-36
+	android:exported
+		ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:22:13-37
+	tools:ignore
+		ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:23:13-40
+	android:name
+		ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:20:13-78
+intent-filter#action:name:com.google.android.gms.metadata.MODULE_DEPENDENCIES
+ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:24:13-26:29
+action#com.google.android.gms.metadata.MODULE_DEPENDENCIES
+ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:25:17-94
+	android:name
+		ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:25:25-91
+meta-data#photopicker_activity:0:required
+ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:28:13-30:36
+	android:value
+		ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:30:17-33
+	android:name
+		ADDED from [:image_picker_android] C:\Users\Blackbird\StudioProjects\Unichat\apps\mobile\build\image_picker_android\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:29:17-63
+uses-library#androidx.window.extensions
+ADDED from [androidx.window:window:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\de9d43518d385bf6ee600243629f4bd2\transformed\window-1.2.0\AndroidManifest.xml:23:9-25:40
+	android:required
+		ADDED from [androidx.window:window:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\de9d43518d385bf6ee600243629f4bd2\transformed\window-1.2.0\AndroidManifest.xml:25:13-37
+	android:name
+		ADDED from [androidx.window:window:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\de9d43518d385bf6ee600243629f4bd2\transformed\window-1.2.0\AndroidManifest.xml:24:13-54
+uses-library#androidx.window.sidecar
+ADDED from [androidx.window:window:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\de9d43518d385bf6ee600243629f4bd2\transformed\window-1.2.0\AndroidManifest.xml:26:9-28:40
+	android:required
+		ADDED from [androidx.window:window:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\de9d43518d385bf6ee600243629f4bd2\transformed\window-1.2.0\AndroidManifest.xml:28:13-37
+	android:name
+		ADDED from [androidx.window:window:1.2.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\de9d43518d385bf6ee600243629f4bd2\transformed\window-1.2.0\AndroidManifest.xml:27:13-51
+provider#androidx.startup.InitializationProvider
+ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7eef7391c05db3d5b811b9f2991458eb\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\5cd90858158b615f75713f713fbd10ac\transformed\startup-runtime-1.1.1\AndroidManifest.xml:26:9-30:34
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\Blackbird\.gradle\caches\8.14\transforms\5cd90858158b615f75713f713fbd10ac\transformed\startup-runtime-1.1.1\AndroidManifest.xml:26:9-30:34
+	tools:node
+		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7eef7391c05db3d5b811b9f2991458eb\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:28:13-31
+	android:authorities
+		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7eef7391c05db3d5b811b9f2991458eb\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:26:13-68
+	android:exported
+		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7eef7391c05db3d5b811b9f2991458eb\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:27:13-37
+	android:name
+		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7eef7391c05db3d5b811b9f2991458eb\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:25:13-67
+meta-data#androidx.lifecycle.ProcessLifecycleInitializer
+ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7eef7391c05db3d5b811b9f2991458eb\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7eef7391c05db3d5b811b9f2991458eb\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\7eef7391c05db3d5b811b9f2991458eb\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:30:17-78
+permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:22:5-24:47
+	android:protectionLevel
+		ADDED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:24:9-44
+	android:name
+		ADDED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:23:9-81
+permission#com.unichat.unichat_mobile.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:22:5-24:47
+	android:protectionLevel
+		ADDED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:24:9-44
+	android:name
+		ADDED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:23:9-81
+uses-permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:26:5-97
+	android:name
+		ADDED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:26:22-94
+uses-permission#com.unichat.unichat_mobile.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:26:5-97
+	android:name
+		ADDED from [androidx.core:core:1.18.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\3c2dd5906d556e3b5fdafabebd094387\transformed\core-1.18.0\AndroidManifest.xml:26:22-94
+meta-data#androidx.profileinstaller.ProfileInstallerInitializer
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:30:17-85
+receiver#androidx.profileinstaller.ProfileInstallReceiver
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:34:9-52:20
+	android:enabled
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:37:13-35
+	android:exported
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:38:13-36
+	android:permission
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:39:13-57
+	android:directBootAware
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:36:13-44
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:35:13-76
+intent-filter#action:name:androidx.profileinstaller.action.INSTALL_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:40:13-42:29
+action#androidx.profileinstaller.action.INSTALL_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:17-91
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:25-88
+intent-filter#action:name:androidx.profileinstaller.action.SKIP_FILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:43:13-45:29
+action#androidx.profileinstaller.action.SKIP_FILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:17-85
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:25-82
+intent-filter#action:name:androidx.profileinstaller.action.SAVE_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:46:13-48:29
+action#androidx.profileinstaller.action.SAVE_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:17-88
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:25-85
+intent-filter#action:name:androidx.profileinstaller.action.BENCHMARK_OPERATION
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:49:13-51:29
+action#androidx.profileinstaller.action.BENCHMARK_OPERATION
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:17-95
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Blackbird\.gradle\caches\8.14\transforms\6172651ad3fae45427d9be6c0c4615f5\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:25-92

@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 46, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/Blackbird/StudioProjects/Unichat/apps/web-admin/src/app/api/institutions/route.ts"],"sourcesContent":["import { NextResponse } from \"next/server\";\n\nconst AUTH = process.env.AUTH_SERVICE_URL ?? \"http://localhost\";\n\nexport async function GET() {\n  const upstream = await fetch(`${AUTH}/api/v1/auth/institutions`);\n  const data = await upstream.json();\n  return NextResponse.json(data, { status: upstream.status });\n}\n"],"names":["AUTH","process","env","AUTH_SERVICE_URL","GET","upstream","fetch","data","json","status"],"mappings":";;;;AAAA;;AAEA,MAAMA,OAAOC,QAAQC,GAAG,CAACC,gBAAgB,IAAI;AAEtC,eAAeC;IACpB,MAAMC,WAAW,MAAMC,MAAM,GAAGN,KAAK,yBAAyB,CAAC;IAC/D,MAAMO,OAAO,MAAMF,SAASG,IAAI;IAChC,OAAO,qMAAY,CAACA,IAAI,CAACD,MAAM;QAAEE,QAAQJ,SAASI,MAAM;IAAC;AAC3D"}}]
+}

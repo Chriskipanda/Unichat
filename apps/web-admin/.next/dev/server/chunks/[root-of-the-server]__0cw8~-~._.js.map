@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 46, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/Blackbird/StudioProjects/Unichat/apps/web-admin/src/app/api/institution/auth/request-otp/route.ts"],"sourcesContent":["import { NextResponse } from \"next/server\";\n\nconst AUTH = process.env.AUTH_SERVICE_URL ?? \"http://localhost\";\n\nexport async function POST(request: Request) {\n  const body = await request.json().catch(() => null);\n  const upstream = await fetch(`${AUTH}/api/v1/auth/institution/request-otp`, {\n    method: \"POST\",\n    headers: { \"Content-Type\": \"application/json\" },\n    body: JSON.stringify(body),\n  });\n  const data = await upstream.json();\n  return NextResponse.json(data, { status: upstream.status });\n}\n"],"names":["AUTH","process","env","AUTH_SERVICE_URL","POST","request","body","json","catch","upstream","fetch","method","headers","JSON","stringify","data","status"],"mappings":";;;;AAAA;;AAEA,MAAMA,OAAOC,QAAQC,GAAG,CAACC,gBAAgB,IAAI;AAEtC,eAAeC,KAAKC,OAAgB;IACzC,MAAMC,OAAO,MAAMD,QAAQE,IAAI,GAAGC,KAAK,CAAC,IAAM;IAC9C,MAAMC,WAAW,MAAMC,MAAM,GAAGV,KAAK,oCAAoC,CAAC,EAAE;QAC1EW,QAAQ;QACRC,SAAS;YAAE,gBAAgB;QAAmB;QAC9CN,MAAMO,KAAKC,SAAS,CAACR;IACvB;IACA,MAAMS,OAAO,MAAMN,SAASF,IAAI;IAChC,OAAO,qMAAY,CAACA,IAAI,CAACQ,MAAM;QAAEC,QAAQP,SAASO,MAAM;IAAC;AAC3D"}}]
+}

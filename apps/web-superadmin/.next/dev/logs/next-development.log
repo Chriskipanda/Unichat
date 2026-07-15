@@ -1,0 +1,4 @@
+{"timestamp":"00:00:01.546","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:00:09.198","source":"Server","level":"LOG","message":"○ Compiling / ..."}
+{"timestamp":"00:00:12.398","source":"Browser","level":"INFO","message":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"}
+{"timestamp":"00:00:13.714","source":"Browser","level":"WARN","message":"Image with src \"http://localhost:3000/vercel.svg\" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: \"auto\"' or 'height: \"auto\"' to maintain the aspect ratio."}

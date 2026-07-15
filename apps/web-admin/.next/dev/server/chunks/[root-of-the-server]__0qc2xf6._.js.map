@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 46, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/Blackbird/StudioProjects/Unichat/apps/web-admin/src/app/api/institution/me/route.ts"],"sourcesContent":["import { NextResponse } from \"next/server\";\nimport { cookies } from \"next/headers\";\n\nconst AUTH = process.env.AUTH_SERVICE_URL ?? \"http://localhost\";\n\nexport async function GET() {\n  const jar = await cookies();\n  const token = jar.get(\"unichat_institution_token\")?.value;\n  const upstream = await fetch(`${AUTH}/api/v1/institution/me`, {\n    headers: { Authorization: `Bearer ${token}` },\n  });\n  const data = await upstream.json();\n  return NextResponse.json(data, { status: upstream.status });\n}\n"],"names":["AUTH","process","env","AUTH_SERVICE_URL","GET","jar","token","get","value","upstream","fetch","headers","Authorization","data","json","status"],"mappings":";;;;AAAA;AACA;;;AAEA,MAAMA,OAAOC,QAAQC,GAAG,CAACC,gBAAgB,IAAI;AAEtC,eAAeC;IACpB,MAAMC,MAAM,MAAM,IAAA,iMAAO;IACzB,MAAMC,QAAQD,IAAIE,GAAG,CAAC,8BAA8BC;IACpD,MAAMC,WAAW,MAAMC,MAAM,GAAGV,KAAK,sBAAsB,CAAC,EAAE;QAC5DW,SAAS;YAAEC,eAAe,CAAC,OAAO,EAAEN,OAAO;QAAC;IAC9C;IACA,MAAMO,OAAO,MAAMJ,SAASK,IAAI;IAChC,OAAO,qMAAY,CAACA,IAAI,CAACD,MAAM;QAAEE,QAAQN,SAASM,MAAM;IAAC;AAC3D"}}]
+}

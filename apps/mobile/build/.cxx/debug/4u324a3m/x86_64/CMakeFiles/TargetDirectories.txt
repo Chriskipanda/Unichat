@@ -1,0 +1,2 @@
+C:/Users/Blackbird/StudioProjects/Unichat/apps/mobile/build/.cxx/debug/4u324a3m/x86_64/CMakeFiles/edit_cache.dir
+C:/Users/Blackbird/StudioProjects/Unichat/apps/mobile/build/.cxx/debug/4u324a3m/x86_64/CMakeFiles/rebuild_cache.dir

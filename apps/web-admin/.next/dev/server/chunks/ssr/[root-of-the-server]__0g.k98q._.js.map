@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 13, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/Blackbird/StudioProjects/Unichat/apps/web-admin/src/app/favicon.ico.mjs%20%28structured%20image%20object%29"],"sourcesContent":["import src from \"IMAGE\";\nexport default { src, width: 256, height: 256 }\n"],"names":["src","width","height"],"mappings":";;;;AAAA;;uCACe;IAAEA,KAAAA,+LAAG;IAAEC,OAAO;IAAKC,QAAQ;AAAI"}},
+    {"offset": {"line": 28, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/Blackbird/StudioProjects/Unichat/apps/web-admin/src/app/page.tsx"],"sourcesContent":["import { cookies } from \"next/headers\";\nimport { redirect } from \"next/navigation\";\n\nexport default async function RootPage() {\n  const jar = await cookies();\n  const token = jar.get(\"unichat_admin_token\")?.value;\n  if (token) redirect(\"/dashboard\");\n  else redirect(\"/login\");\n}\n"],"names":["RootPage","jar","token","get","value"],"mappings":";;;;AAAA;AACA;AAAA;;;AAEe,eAAeA;IAC5B,MAAMC,MAAM,MAAM,IAAA,+LAAO;IACzB,MAAMC,QAAQD,IAAIE,GAAG,CAAC,wBAAwBC;IAC9C,IAAIF,OAAO,IAAA,sPAAQ,EAAC;SACf,IAAA,sPAAQ,EAAC;AAChB"}}]
+}

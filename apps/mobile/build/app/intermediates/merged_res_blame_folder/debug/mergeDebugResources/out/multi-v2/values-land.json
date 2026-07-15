@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.unichat.unichat_mobile.app-mergeDebugResources-44:/values-land/values-land.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\Blackbird\\.gradle\\caches\\8.14\\transforms\\dada052338995c83147ddb9f506a2294\\transformed\\appcompat-1.1.0\\res\\values-land\\values-land.xml",
+                    "from": {
+                        "startLines": "2,3,4",
+                        "startColumns": "4,4,4",
+                        "startOffsets": "55,125,196",
+                        "endColumns": "69,70,67",
+                        "endOffsets": "120,191,259"
+                    }
+                }
+            ]
+        }
+    ]
+}
