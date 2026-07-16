@@ -32,7 +32,8 @@ async function main() {
   });
   console.log(`Tenant: ${atc.name} (${atc.plan})`);
 
-  // 2. Create ATC Institution Admin (tenant-scoped)
+  // 2. Create ATC Institution Admin (tenant-scoped). Phone in 255… form for OTP SMS.
+  const ADMIN_PHONE = '255650111745';
   const adminExists = await prisma.user.findFirst({
     where: { tenantId: atc.id, email: 'admin@atc.ac.tz' },
   });
@@ -45,11 +46,16 @@ async function main() {
         fullName: 'ATC System Administrator',
         role: 'admin',
         passwordHash: adminHash,
+        phone: ADMIN_PHONE,
         isActive: true,
       },
     });
     console.log(`Institution admin: ${admin.fullName}`);
   } else {
+    // Backfill the phone on an account seeded before SMS existed.
+    if (!adminExists.phone) {
+      await prisma.user.update({ where: { id: adminExists.id }, data: { phone: ADMIN_PHONE } });
+    }
     console.log('Institution admin already exists');
   }
 
@@ -76,9 +82,10 @@ async function main() {
 
   // 4. Two ATC students. Testing chat needs two accounts — one can't DM itself
   // — and students sign in with an OTP, so they carry no password.
+  // Phones are in 255… form so SEWMR SMS can deliver the OTP.
   const students = [
-    { fullName: 'Test Student',   email: 'student@atc.ac.tz',  studentId: 'ATC-2026-001' },
-    { fullName: 'Second Student', email: 'student2@atc.ac.tz', studentId: 'ATC-2026-002' },
+    { fullName: 'Test Student',   email: 'student@atc.ac.tz',  studentId: 'ATC-2026-001', phone: '255765754129' },
+    { fullName: 'Second Student', email: 'student2@atc.ac.tz', studentId: 'ATC-2026-002', phone: '255621999699' },
   ];
   for (const s of students) {
     const exists = await prisma.user.findFirst({
@@ -90,6 +97,10 @@ async function main() {
       });
       console.log(`Student created: ${s.fullName} (${s.studentId})`);
     } else {
+      // Backfill the phone on an account seeded before SMS existed.
+      if (!exists.phone) {
+        await prisma.user.update({ where: { id: exists.id }, data: { phone: s.phone } });
+      }
       console.log(`Student already exists: ${s.fullName}`);
     }
   }

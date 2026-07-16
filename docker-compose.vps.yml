@@ -94,6 +94,11 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:-super_secret_unichat_key}
       KAFKA_BROKERS: redpanda:9092
+      # SEWMR SMS — set these in a .env beside this file (never committed). When
+      # unset, OTPs fall back to the auth-service log.
+      SMS_API_TOKEN: ${SMS_API_TOKEN:-}
+      SMS_SENDER_ID: ${SMS_SENDER_ID:-}
+      SMS_BASE_URL: ${SMS_BASE_URL:-https://api.sewmrsms.co.tz}
     depends_on:
       postgres:
         condition: service_healthy

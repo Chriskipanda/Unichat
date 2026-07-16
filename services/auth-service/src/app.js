@@ -1,5 +1,6 @@
 const fastify = require('fastify')({ logger: true });
 const otpService = require('./services/otp.service');
+const smsService = require('./services/sms.service');
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
@@ -114,7 +115,12 @@ fastify.post('/api/v1/auth/institution/request-otp', async (request, reply) => {
   const otp = otpService.generateOtp();
   await redis.set(`otp:admin:${tenant.id}:${user.id}`, otp, 'EX', 300);
 
-  fastify.log.info(`[ADMIN OTP] ${user.fullName} @ ${tenant.slug}: ${otp}`);
+  const sms = await smsService.sendOtp(user.phone, otp);
+  if (sms.sent) {
+    fastify.log.info(`[ADMIN OTP] ${user.fullName} @ ${tenant.slug}: sent via SMS to ${smsService.maskPhone(user.phone)}`);
+  } else {
+    fastify.log.info(`[ADMIN OTP] ${user.fullName} @ ${tenant.slug}: ${otp}  [sms: ${sms.reason || sms.error}]`);
+  }
 
   return { message: 'OTP sent', user: { fullName: user.fullName, email: user.email } };
 });
@@ -865,9 +871,22 @@ fastify.post('/api/v1/auth/request-otp', async (request, reply) => {
 
   const otp = otpService.generateOtp();
   await redis.set(`otp:${tenant.id}:${user.id}`, otp, 'EX', 300);
-  fastify.log.info(`[OTP] ${user.fullName} (${identifier}): ${otp}`);
 
-  return { message: 'OTP sent successfully', target: user.email ? 'email' : 'phone', user: { fullName: user.fullName } };
+  // Deliver by SMS when the user has a phone and SMS is configured. Only log
+  // the code when it could NOT be sent, so a real deployment doesn't leak
+  // every OTP into the logs while dev/testing still has a way to read it.
+  const sms = await smsService.sendOtp(user.phone, otp);
+  if (sms.sent) {
+    fastify.log.info(`[OTP] ${user.fullName}: sent via SMS to ${smsService.maskPhone(user.phone)}`);
+  } else {
+    fastify.log.info(`[OTP] ${user.fullName} (${identifier}): ${otp}  [sms: ${sms.reason || sms.error}]`);
+  }
+
+  return {
+    message: 'OTP sent successfully',
+    target: sms.sent ? 'sms' : (user.email ? 'email' : 'phone'),
+    user: { fullName: user.fullName },
+  };
 });
 
 fastify.post('/api/v1/auth/verify-otp', async (request, reply) => {
