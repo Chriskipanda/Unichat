@@ -28,7 +28,11 @@ class AppColorSet {
 class Config {
   // Runtime-editable — persisted in SharedPreferences under key 'server_url'.
   // Falls back to the hardcoded default if nothing is saved.
-  static String _baseUrl = 'localhost';
+  // Default points at the always-on VPS backend, so a fresh install (e.g. the
+  // APK handed to a tester) connects with no setup. A user can still override
+  // it in the server picker — a saved value wins over this — so local dev
+  // against 'localhost' keeps working once entered.
+  static String _baseUrl = '169.58.31.132';
   static String get baseUrl => _baseUrl;
 
   /// Load the saved server URL from storage (call once at startup).
@@ -50,7 +54,7 @@ class Config {
   }
 
   /// The hardcoded fallback, shown as placeholder in the picker.
-  static const String defaultUrl = 'localhost';
+  static const String defaultUrl = '169.58.31.132';
   static const String appName = 'UniChat';
 }
 
