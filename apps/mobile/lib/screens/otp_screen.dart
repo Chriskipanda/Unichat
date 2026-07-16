@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_otp_text_field/flutter_otp_text_field.dart';
 import 'package:http/http.dart' as http;
+import 'package:pinput/pinput.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:smart_auth/smart_auth.dart';
 import '../config.dart';
 import '../models/models.dart';
+import '../services/sms_retriever_impl.dart';
 import '../widgets/glass_card.dart';
 import 'home_screen.dart';
 
@@ -37,9 +39,13 @@ class _OtpScreenState extends State<OtpScreen>
   late Animation<double> _iconScale;
   late Animation<double> _fade;
 
+  // Drives Pinput's one-tap SMS autofill on Android; harmless elsewhere.
+  late final SmsRetrieverImpl _smsRetriever;
+
   @override
   void initState() {
     super.initState();
+    _smsRetriever = SmsRetrieverImpl(SmartAuth.instance);
     _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 700))..forward();
     _iconScale = CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut);
     _fade = CurvedAnimation(parent: _ctrl, curve: const Interval(0.4, 1.0, curve: Curves.easeIn));
@@ -138,7 +144,38 @@ class _OtpScreenState extends State<OtpScreen>
   void dispose() {
     _timer?.cancel();
     _ctrl.dispose();
+    _smsRetriever.dispose();
     super.dispose();
+  }
+
+  /// Six-box OTP input. On Android the incoming code auto-fills via one-tap SMS
+  /// User Consent (wired through [_smsRetriever]); everywhere else it's normal
+  /// manual entry with the OS one-time-code hint.
+  Widget _buildOtpField(BuildContext context) {
+    final defaultPinTheme = PinTheme(
+      width: 52,
+      height: 60,
+      textStyle: const TextStyle(
+        fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.brand, height: 1.0,
+      ),
+      decoration: BoxDecoration(
+        color: context.cl.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.cl.divider, width: 1.8),
+      ),
+    );
+    return Pinput(
+      length: 6,
+      defaultPinTheme: defaultPinTheme,
+      focusedPinTheme: defaultPinTheme.copyBorderWith(
+        border: Border.all(color: AppColors.brand, width: 1.8),
+      ),
+      smsRetriever: _smsRetriever,
+      keyboardType: TextInputType.number,
+      autofocus: true,
+      onChanged: (code) => setState(() => _otp = code),
+      onCompleted: (code) { setState(() => _otp = code); _verifyOtp(); },
+    );
   }
 
   @override
@@ -231,24 +268,7 @@ class _OtpScreenState extends State<OtpScreen>
                                 ),
                               ),
                               const SizedBox(height: 40),
-                              OtpTextField(
-                                numberOfFields: 6,
-                                borderColor: context.cl.divider,
-                                focusedBorderColor: AppColors.brand,
-                                showFieldAsBox: true,
-                                fieldWidth: 52,
-                                fieldHeight: 60,
-                                borderRadius: BorderRadius.circular(14),
-                                fillColor: context.cl.card,
-                                filled: true,
-                                textStyle: const TextStyle(
-                                  fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.brand,
-                                  height: 1.0,
-                                ),
-                                borderWidth: 1.8,
-                                onCodeChanged: (code) => setState(() => _otp = code),
-                                onSubmit: (code) { setState(() => _otp = code); _verifyOtp(); },
-                              ),
+                              _buildOtpField(context),
                               const SizedBox(height: 36),
                               SizedBox(
                                 width: double.infinity,
