@@ -5,10 +5,13 @@ import { useEffect, useState } from "react";
 interface Stats {
   totalUsers: number;
   students: number;
-  staff: number;
+  teachers: number;
+  classReps: number;
   admins: number;
   totalClubs: number;
   totalDepartments: number;
+  totalProgrammes: number;
+  totalAssignments: number;
 }
 
 interface StatCardProps {
@@ -38,7 +41,9 @@ export default function AdminOverviewPage() {
       fetch("/api/institution/users").then((r) => r.json()),
       fetch("/api/institution/clubs").then((r) => r.json()),
       fetch("/api/institution/departments").then((r) => r.json()),
-    ]).then(([meData, usersData, clubsData, deptsData]) => {
+      fetch("/api/institution/courses").then((r) => r.json()),
+      fetch("/api/institution/assignments").then((r) => r.json()),
+    ]).then(([meData, usersData, clubsData, deptsData, coursesData, assignmentsData]) => {
       if (meData.institution?.name) setInstitutionName(meData.institution.name);
       const users: { role: string }[] = usersData.users ?? [];
       const deptCount = (deptsData.faculties ?? []).reduce(
@@ -48,10 +53,13 @@ export default function AdminOverviewPage() {
       setStats({
         totalUsers: users.length,
         students: users.filter((u) => u.role === "student").length,
-        staff: users.filter((u) => u.role === "staff").length,
+        teachers: users.filter((u) => u.role === "teacher" || u.role === "staff").length,
+        classReps: users.filter((u) => u.role === "class_rep").length,
         admins: users.filter((u) => u.role === "admin").length,
         totalClubs: clubsData.clubs?.length ?? 0,
         totalDepartments: deptCount,
+        totalProgrammes: coursesData.courses?.length ?? 0,
+        totalAssignments: assignmentsData.assignments?.length ?? 0,
       });
     });
   }, []);
@@ -72,20 +80,25 @@ export default function AdminOverviewPage() {
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Users" value={stats.totalUsers} color="bg-gradient-to-br from-indigo-600 to-indigo-950" />
         <StatCard label="Students" value={stats.students} color="bg-gradient-to-br from-blue-500 to-blue-900" />
-        <StatCard label="Staff" value={stats.staff} color="bg-gradient-to-br from-violet-500 to-violet-900" />
+        <StatCard label="Teachers" value={stats.teachers} color="bg-gradient-to-br from-violet-500 to-violet-900" />
         <StatCard label="Admins" value={stats.admins} color="bg-gradient-to-br from-indigo-400 to-indigo-800" />
-        <StatCard label="Clubs" value={stats.totalClubs} color="bg-gradient-to-br from-purple-500 to-purple-900" />
+        <StatCard label="Class Reps" value={stats.classReps} sub="students promoted via a teaching assignment" color="bg-gradient-to-br from-amber-500 to-amber-800" />
+        <StatCard label="Teaching Assignments" value={stats.totalAssignments} sub="course + NTA level pairs" color="bg-gradient-to-br from-emerald-500 to-emerald-900" />
+        <StatCard label="Programmes" value={stats.totalProgrammes} color="bg-gradient-to-br from-teal-500 to-teal-900" />
         <StatCard label="Departments" value={stats.totalDepartments} color="bg-gradient-to-br from-slate-600 to-slate-900" />
+        <StatCard label="Clubs" value={stats.totalClubs} color="bg-gradient-to-br from-purple-500 to-purple-900" />
       </div>
 
       {/* Quick links */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { href: "/admin/users", label: "Manage Users", desc: "Add students & staff" },
+          { href: "/admin/users", label: "Manage Users", desc: "Add students, teachers & assign departments" },
           { href: "/admin/departments", label: "Departments", desc: "Faculties & departments" },
+          { href: "/admin/courses", label: "Courses", desc: "Programme catalog" },
+          { href: "/admin/assignments", label: "Assignments", desc: "Who teaches what, and Class Reps" },
           { href: "/admin/clubs", label: "Clubs", desc: "Student organizations" },
           { href: "/admin/branding", label: "Branding", desc: "Colours, logo, fonts" },
         ].map((link) => (

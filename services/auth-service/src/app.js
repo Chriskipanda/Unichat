@@ -810,6 +810,52 @@ fastify.delete('/api/v1/teacher/assignments/:id/cr', { preHandler: teacherOnly }
 });
 
 // ─────────────────────────────────────────────────────────────────
+// Institution Admin — read-only visibility + override control over every
+// teacher's course/NTA-level assignments and Class Rep picks, institution-
+// wide (teachers only ever see/manage their own via /api/v1/teacher/*).
+// ─────────────────────────────────────────────────────────────────
+fastify.get('/api/v1/institution/assignments', { preHandler: institutionAdminOnly }, async (request) => {
+  const { tenantId } = request.user;
+  const assignments = await prisma.teacherAssignment.findMany({
+    where: { tenantId },
+    include: {
+      teacher: { select: { id: true, fullName: true, email: true, phone: true } },
+      ...ASSIGNMENT_INCLUDE,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  return { assignments };
+});
+
+fastify.delete('/api/v1/institution/assignments/:id', { preHandler: institutionAdminOnly }, async (request, reply) => {
+  const { id } = request.params;
+  const { tenantId } = request.user;
+
+  const assignment = await prisma.teacherAssignment.findFirst({ where: { id, tenantId } });
+  if (!assignment) return reply.code(404).send({ error: 'Assignment not found' });
+
+  await prisma.teacherAssignment.delete({ where: { id } });
+  if (assignment.crUserId) await demoteIfOrphanedCr(assignment.crUserId, tenantId);
+
+  return reply.code(204).send();
+});
+
+fastify.delete('/api/v1/institution/assignments/:id/cr', { preHandler: institutionAdminOnly }, async (request, reply) => {
+  const { id } = request.params;
+  const { tenantId } = request.user;
+
+  const assignment = await prisma.teacherAssignment.findFirst({ where: { id, tenantId } });
+  if (!assignment) return reply.code(404).send({ error: 'Assignment not found' });
+  if (!assignment.crUserId) return reply.code(204).send();
+
+  const previousCrId = assignment.crUserId;
+  await prisma.teacherAssignment.update({ where: { id }, data: { crUserId: null } });
+  await demoteIfOrphanedCr(previousCrId, tenantId);
+
+  return reply.code(204).send();
+});
+
+// ─────────────────────────────────────────────────────────────────
 // Student / Staff — data endpoints (any tenant-scoped bearer token)
 // ─────────────────────────────────────────────────────────────────
 const bearerAuth = async (request, reply) => {
