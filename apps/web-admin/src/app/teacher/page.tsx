@@ -40,9 +40,18 @@ interface Student {
   role: string;
 }
 
-// Standard NACTE/VETA-style NTA bands. "Other" falls back to free text so an
-// unusual level (or a future band) never blocks registering an assignment.
-const NTA_LEVELS = ["NTA Level 4", "NTA Level 5", "NTA Level 6", "NTA Level 7-1", "NTA Level 7-2", "NTA Level 8-1", "NTA Level 8-2"];
+// Standard NACTE/VETA-style NTA bands — which ones apply depends on the
+// programme level: Ordinary Diploma runs NTA 4-6, Bachelor Degree runs
+// NTA 7-1/7-2/8. "Other" always stays available as a free-text fallback.
+const DIPLOMA_LEVELS = ["NTA Level 4", "NTA Level 5", "NTA Level 6"];
+const BACHELOR_LEVELS = ["NTA Level 7-1", "NTA Level 7-2", "NTA Level 8"];
+
+function levelsForCourse(course: Course | undefined): string[] {
+  const name = course?.name.toLowerCase() ?? "";
+  if (name.includes("bachelor")) return BACHELOR_LEVELS;
+  if (name.includes("ordinary diploma") || name.includes("diploma")) return DIPLOMA_LEVELS;
+  return [...DIPLOMA_LEVELS, ...BACHELOR_LEVELS]; // unrecognised naming — offer everything
+}
 
 function AddAssignmentModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -57,6 +66,17 @@ function AddAssignmentModal({ onClose, onCreated }: { onClose: () => void; onCre
       .then((r) => r.json())
       .then((d) => setCourses(d.courses ?? []));
   }, []);
+
+  const selectedCourse = courses.find((c) => c.id === courseId);
+  const availableLevels = levelsForCourse(selectedCourse);
+
+  function handleCourseChange(id: string) {
+    setCourseId(id);
+    // A level picked for the previous course may not apply to this one
+    // (e.g. switching from a Diploma to a Bachelor programme).
+    setNtaLevel("");
+    setNtaLevelOther(false);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -88,7 +108,7 @@ function AddAssignmentModal({ onClose, onCreated }: { onClose: () => void; onCre
               <label className="block text-sm font-medium text-gray-700 mb-1">Course</label>
               <select
                 value={courseId}
-                onChange={(e) => setCourseId(e.target.value)}
+                onChange={(e) => handleCourseChange(e.target.value)}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                 required
               >
@@ -107,11 +127,12 @@ function AddAssignmentModal({ onClose, onCreated }: { onClose: () => void; onCre
                   if (v === "__other__") { setNtaLevelOther(true); setNtaLevel(""); }
                   else { setNtaLevelOther(false); setNtaLevel(v); }
                 }}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                disabled={!courseId}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
                 required={!ntaLevelOther}
               >
-                <option value="">Select NTA level…</option>
-                {NTA_LEVELS.map((lvl) => (
+                <option value="">{courseId ? "Select NTA level…" : "Select a course first"}</option>
+                {availableLevels.map((lvl) => (
                   <option key={lvl} value={lvl}>{lvl}</option>
                 ))}
                 <option value="__other__">Other…</option>
