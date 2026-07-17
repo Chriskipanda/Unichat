@@ -233,7 +233,7 @@ fastify.post('/api/v1/messages/:groupId', async (request, reply) => {
  */
 fastify.get('/api/v1/messages/:groupId', async (request, reply) => {
   const { groupId } = request.params;
-  const { limit = '60', before } = request.query || {};
+  const { limit = '60', before, userId } = request.query || {};
 
   const messages = await prisma.message.findMany({
     where: {
@@ -248,6 +248,22 @@ fastify.get('/api/v1/messages/:groupId', async (request, reply) => {
     },
   });
 
+  // Real per-message read status on reload, not a guess: the client can only
+  // tell "read" from "delivered" for its own past messages by comparing each
+  // timestamp against how far the other side has actually read up to.
+  // Approximated as the *latest* lastReadAt among everyone else in the room —
+  // exact for a DM (one other member), an over-generous approximation for a
+  // group (flips blue once the first other member has read that far).
+  let otherReadAt = null;
+  if (userId) {
+    const others = await prisma.groupMember.findMany({
+      where: { groupId, userId: { not: userId } },
+      select: { lastReadAt: true },
+    });
+    const timestamps = others.map(o => o.lastReadAt).filter(Boolean).map(d => d.getTime());
+    if (timestamps.length > 0) otherReadAt = new Date(Math.max(...timestamps)).toISOString();
+  }
+
   return {
     messages: messages.map(m => ({
       id: m.id,
@@ -260,6 +276,7 @@ fastify.get('/api/v1/messages/:groupId', async (request, reply) => {
       replyToId: m.replyToId ?? null,
       replyTo: serializeReplyTo(m.replyTo),
     })),
+    otherReadAt,
   };
 });
 
@@ -287,6 +304,18 @@ const start = async () => {
       socket.on('join_room', (roomId) => {
         socket.join(roomId);
         fastify.log.info(`User ${socket.id} joined room: ${roomId}`);
+
+        // broadcastDelivered() only checks room membership at the instant a
+        // message is sent — if the recipient's socket wasn't joined yet
+        // (reconnecting, app still starting up), that message is stuck on a
+        // single grey tick forever with nothing to re-check it later. This
+        // join is exactly the moment to self-heal: tell whoever's already in
+        // the room that someone new is here, so their open chat screen can
+        // promote any of its own still-"sent" messages to delivered.
+        const room = io.sockets.adapter.rooms.get(roomId);
+        if (room && room.size > 1) {
+          socket.to(roomId).emit('room_active', { roomId });
+        }
       });
 
       // A client emits this the moment its chat screen for roomId is open

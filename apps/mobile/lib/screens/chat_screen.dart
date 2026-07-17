@@ -98,7 +98,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     try {
       final res = await http.get(
-        Uri.parse('http://${Config.baseUrl}/api/v1/messages/${widget.roomId}?limit=60'),
+        Uri.parse('http://${Config.baseUrl}/api/v1/messages/${widget.roomId}?limit=60&userId=${widget.user.id}'),
         headers: {'Authorization': 'Bearer ${widget.token}'},
       ).timeout(const Duration(seconds: 15));
 
@@ -106,10 +106,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         final list = (data['messages'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+        final otherReadAt = DateTime.tryParse(data['otherReadAt']?.toString() ?? '');
         setState(() {
           _messages
             ..clear()
-            ..addAll(list.map(_messageFrom));
+            ..addAll(list.map((m) => _messageFrom(m, otherReadAt: otherReadAt)));
           _loadingHistory = false;
           _isOffline = false;
         });
@@ -153,12 +154,22 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _scrollToBottom();
   }
 
-  Message _messageFrom(Map<String, dynamic> json) => Message.fromJson(
-        json,
-        status: json['senderId'] == widget.user.id
-            ? MessageStatus.read
-            : MessageStatus.delivered,
-      );
+  /// [otherReadAt] is how far the other side has actually read, straight from
+  /// the server (GroupMember.lastReadAt) — not a guess. Without it every
+  /// reload used to hardcode all of your own past messages to a blue tick
+  /// regardless of whether the recipient ever opened the chat.
+  Message _messageFrom(Map<String, dynamic> json, {DateTime? otherReadAt}) {
+    MessageStatus status;
+    if (json['senderId'] == widget.user.id) {
+      final ts = DateTime.tryParse(json['timestamp']?.toString() ?? '');
+      status = (otherReadAt != null && ts != null && !ts.isAfter(otherReadAt))
+          ? MessageStatus.read
+          : MessageStatus.delivered;
+    } else {
+      status = MessageStatus.delivered;
+    }
+    return Message.fromJson(json, status: status);
+  }
 
   void _connectSocket() {
     try {
@@ -205,6 +216,24 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         setState(() {
           for (final m in _messages) {
             if (m.id == messageId && m.senderId == widget.user.id && m.status == MessageStatus.sent) {
+              m.status = MessageStatus.delivered;
+            }
+          }
+        });
+      });
+      // message_delivered only fires once, at the instant a message broadcasts
+      // — if the recipient's socket wasn't in the room yet at that exact
+      // moment (mid-reconnect, app still starting up), a message could stay
+      // stuck on a single tick forever with nothing to re-check it. Someone
+      // (re)joining the room now is a second chance: promote everything of
+      // ours still sitting at "sent".
+      _socket!.on('room_active', (data) {
+        if (!mounted) return;
+        final d = Map<String, dynamic>.from(data);
+        if (d['roomId'] != widget.roomId) return;
+        setState(() {
+          for (final m in _messages) {
+            if (m.senderId == widget.user.id && m.status == MessageStatus.sent) {
               m.status = MessageStatus.delivered;
             }
           }
