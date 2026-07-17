@@ -1,5 +1,8 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import '../config.dart';
+
+final _idRandom = Random();
 
 // ── Tenant (SaaS) ─────────────────────────────────────────────
 class TenantModel {
@@ -133,7 +136,7 @@ class Message {
   /// adopt the server's once it responds — replying to or deleting a message
   /// sends this id back, so a stale temp id would be rejected.
   String id;
-  final String content;
+  String content;
   final String senderId;
   final String senderName;
   final DateTime timestamp;
@@ -142,6 +145,19 @@ class Message {
   final String? localImagePath;  // optimistic local file before upload
   String? imageUrl;              // served URL after upload (mutable so sender can update after 201)
   final String? senderAvatar;    // sender's profile photo URL
+  /// Client-generated once at compose time, resent unchanged on every retry
+  /// so the server can recognize a retried send instead of creating a
+  /// duplicate. Never regenerated for the lifetime of this Message object.
+  final String clientMessageId;
+  bool isEdited;
+  DateTime? editedAt;
+  bool deleted;
+  /// The server permanently rejected this send (4xx) — distinct from
+  /// "sending", which used to be the terminal state for a failed send too,
+  /// leaving the user with no way to tell "still trying" from "gave up".
+  bool failed;
+  /// userId -> emoji, one active reaction per user.
+  Map<String, String> reactions;
 
   Message({
     required this.id,
@@ -154,7 +170,28 @@ class Message {
     this.localImagePath,
     this.imageUrl,
     this.senderAvatar,
-  });
+    String? clientMessageId,
+    this.isEdited = false,
+    this.editedAt,
+    this.deleted = false,
+    this.failed = false,
+    Map<String, String>? reactions,
+  })  : clientMessageId = clientMessageId ?? _generateId(),
+        reactions = reactions ?? {};
+
+  static int _idCounter = 0;
+  // A unique-enough id without pulling in a uuid package: wall-clock time
+  // (orders roughly with creation), a per-process counter (disambiguates
+  // same-microsecond calls), and a random suffix (disambiguates across app
+  // restarts, since the counter resets to 0 each launch). Only ever compared
+  // against the sender's own prior attempts, so this doesn't need to be
+  // cryptographically unguessable — just practically unique.
+  static String _generateId() {
+    _idCounter++;
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final rand = _idRandom.nextInt(1 << 32);
+    return '$now-$_idCounter-$rand';
+  }
 
   bool get isImage => localImagePath != null || imageUrl != null;
 
@@ -196,7 +233,22 @@ class Message {
       imageUrl: isMedia ? '$_origin$content' : (data['imageUrl'] as String?),
       senderAvatar: data['senderAvatar'] as String?,
       replyTo: _parseQuote(data['replyTo']),
+      isEdited: data['isEdited'] as bool? ?? false,
+      editedAt: data['editedAt'] != null ? DateTime.tryParse(data['editedAt'].toString())?.toLocal() : null,
+      deleted: data['deleted'] as bool? ?? false,
+      reactions: _parseReactions(data['reactions']),
     );
+  }
+
+  static Map<String, String> _parseReactions(dynamic raw) {
+    if (raw is! List) return {};
+    final out = <String, String>{};
+    for (final r in raw) {
+      if (r is Map && r['userId'] != null && r['emoji'] != null) {
+        out[r['userId'].toString()] = r['emoji'].toString();
+      }
+    }
+    return out;
   }
 
   /// The quoted message shown above a reply. Only needs enough to render the
@@ -245,6 +297,7 @@ class ChatPreview {
   // class rep, or group owner/admin. Server-enforced; this only drives
   // whether the client shows the edit affordance.
   final bool canEditAvatar;
+  final bool muted;
 
   const ChatPreview({
     required this.id,
@@ -260,6 +313,7 @@ class ChatPreview {
     this.isOnline = false,
     this.isGroup = false,
     this.canEditAvatar = false,
+    this.muted = false,
   });
 
   /// What the row shows: an upload URL is meaningless to a reader, so media

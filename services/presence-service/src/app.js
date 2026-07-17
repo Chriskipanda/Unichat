@@ -1,5 +1,6 @@
 const fastify = require('fastify')({ logger: true });
 const { Server } = require('socket.io');
+const { createAdapter } = require('@socket.io/redis-adapter');
 const Redis = require('ioredis');
 
 const { registerJwt, verifyToken } = require('../../../shared/auth');
@@ -15,6 +16,12 @@ const start = async () => {
     const io = new Server(fastify.server, {
       cors: { origin: '*' }
     });
+
+    // Same reasoning as messaging-service: without this, `io.emit(...)`
+    // (used for user_status below) only reaches sockets on this process.
+    const pubClient = redis.duplicate();
+    const subClient = redis.duplicate();
+    io.adapter(createAdapter(pubClient, subClient));
 
     // A user's online status used to be whatever the client claimed via a
     // raw query string — trivially spoofable. Identity now comes from the

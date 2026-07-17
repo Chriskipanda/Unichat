@@ -1074,6 +1074,7 @@ fastify.get('/api/v1/student/rooms', { preHandler: bearerAuth }, async (request)
         subtitle,
         avatarUrl: g.type === 'private' ? (other?.user?.avatarUrl ?? null) : (g.avatarUrl ?? null),
         canEditAvatar,
+        muted: myMembership?.muted ?? false,
         lastMessage: g.messages[0]?.content ?? '',
         // Media stores its URL in content, so the client needs the type to show
         // a label instead of printing the raw upload path in the chat list.
@@ -1098,6 +1099,29 @@ fastify.patch('/api/v1/student/rooms/:roomId/read', { preHandler: bearerAuth }, 
       data: { lastReadAt: new Date() },
     });
     return { ok: true };
+  } catch (e) {
+    if (e.code === 'P2025') return reply.code(404).send({ error: 'Room not found' });
+    fastify.log.error(e);
+    return reply.code(500).send({ error: e.message });
+  }
+});
+
+// Mute/unmute — purely this member's own notification preference for the
+// room, never anything that affects what anyone else in the room sees.
+fastify.patch('/api/v1/student/rooms/:roomId/mute', { preHandler: bearerAuth }, async (request, reply) => {
+  const { userId } = request.user;
+  const { roomId } = request.params;
+  const { muted } = request.body || {};
+  if (typeof muted !== 'boolean') {
+    return reply.code(400).send({ error: 'muted (boolean) is required' });
+  }
+  try {
+    const updated = await prisma.groupMember.update({
+      where: { groupId_userId: { groupId: roomId, userId } },
+      data: { muted },
+      select: { muted: true },
+    });
+    return updated;
   } catch (e) {
     if (e.code === 'P2025') return reply.code(404).send({ error: 'Room not found' });
     fastify.log.error(e);

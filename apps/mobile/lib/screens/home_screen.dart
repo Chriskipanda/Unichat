@@ -143,6 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
       isGroup: old.isGroup, isOnline: old.isOnline,
       unreadCount: isMine ? old.unreadCount : old.unreadCount + 1,
       canEditAvatar: old.canEditAvatar,
+      muted: old.muted,
     );
     setState(() {
       _chats.removeAt(idx);
@@ -152,7 +153,8 @@ class _HomeScreenState extends State<HomeScreen> {
     // Only alert for someone else's message in a room that isn't the one the
     // user is already looking at — ChatScreen has its own socket and shows the
     // message directly, so re-alerting there would be redundant and annoying.
-    if (!isMine && roomId != ActiveChatTracker.currentRoomId) {
+    // Muted rooms never alert, regardless of which screen is open.
+    if (!isMine && roomId != ActiveChatTracker.currentRoomId && !updated.muted) {
       SystemSound.play(SystemSoundType.alert);
       HapticFeedback.lightImpact();
       _showIncomingBanner(updated);
@@ -322,6 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
             isGroup: isGroup,
             unreadCount: unreadCount,
             canEditAvatar: r['canEditAvatar'] as bool? ?? false,
+            muted: r['muted'] as bool? ?? false,
           );
         }).toList();
 
@@ -1615,7 +1618,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (_) => ChatScreen(
         roomId: chat.id, roomName: chat.name, subtitle: chat.subtitle,
         isGroup: chat.isGroup, isOnline: chat.isOnline,
-        avatarUrl: chat.avatarUrl, canEditAvatar: chat.canEditAvatar,
+        avatarUrl: chat.avatarUrl, canEditAvatar: chat.canEditAvatar, muted: chat.muted,
         user: widget.user, token: widget.token,
       ),
     )).then((_) => _loadRooms());

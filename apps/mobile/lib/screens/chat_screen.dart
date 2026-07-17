@@ -23,6 +23,7 @@ class ChatScreen extends StatefulWidget {
   final bool isOnline;
   final String? avatarUrl;
   final bool canEditAvatar;
+  final bool muted;
   final UserModel user;
   final String token;
 
@@ -30,7 +31,7 @@ class ChatScreen extends StatefulWidget {
     super.key,
     required this.roomId, required this.roomName, required this.subtitle,
     required this.isGroup, required this.isOnline,
-    this.avatarUrl, this.canEditAvatar = false,
+    this.avatarUrl, this.canEditAvatar = false, this.muted = false,
     required this.user, required this.token,
   });
 
@@ -49,12 +50,25 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool _showAttachPanel = false;
   String _typingUser = '';
   Message? _replyingTo;
+  Message? _editingMessage;
   String? _avatarUrl;
   bool _uploadingAvatar = false;
   io.Socket? _socket;
   io.Socket? _presenceSocket;
   Timer? _typingClearTimer;   // receiver side: drops a stale "is typing…"
   DateTime? _lastTypingEmit;  // sender side: throttles the typing event
+  bool _muted = false;
+  bool _searching = false;
+  final _searchCtrl = TextEditingController();
+  List<Map<String, dynamic>> _searchResults = [];
+  bool _searchLoading = false;
+  // Per-room monotonic counter from the server — a gap between consecutive
+  // values (expected n+1, got n+3) means at least one broadcast was missed
+  // while disconnected. There's no way to replay just the gap, so the
+  // correct response is the same one a manual reopen already does: reload
+  // history from the server, which is authoritative regardless of what the
+  // socket did or didn't deliver in between.
+  int? _lastSeq;
 
   late AnimationController _typingCtrl;
   late List<Animation<double>> _dotAnims;
@@ -64,6 +78,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     super.initState();
     ActiveChatTracker.currentRoomId = widget.roomId;
     _avatarUrl = widget.avatarUrl;
+    _muted = widget.muted;
     _setupTypingAnimation();
     _connectSocket();
     _loadHistory();
@@ -98,7 +113,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     try {
       final res = await http.get(
-        Uri.parse('http://${Config.baseUrl}/api/v1/messages/${widget.roomId}?limit=60&userId=${widget.user.id}'),
+        Uri.parse('http://${Config.baseUrl}/api/v1/messages/${widget.roomId}?limit=60'),
         headers: {'Authorization': 'Bearer ${widget.token}'},
       ).timeout(const Duration(seconds: 15));
 
@@ -106,11 +121,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         final list = (data['messages'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-        final otherReadAt = DateTime.tryParse(data['otherReadAt']?.toString() ?? '');
+        // A fresh, authoritative snapshot — any gap the live socket missed is
+        // resolved by this fetch, so the next new_message just re-establishes
+        // the baseline rather than comparing against a now-stale value.
+        _lastSeq = null;
         setState(() {
           _messages
             ..clear()
-            ..addAll(list.map((m) => _messageFrom(m, otherReadAt: otherReadAt)));
+            ..addAll(list.map(_messageFrom));
           _loadingHistory = false;
           _isOffline = false;
         });
@@ -136,35 +154,52 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   /// look lost every time the user reopened the chat.
   Future<void> _restorePending() async {
     final pending = await Outbox.pendingFor(widget.roomId);
-    if (!mounted || pending.isEmpty) return;
-    setState(() {
-      for (final p in pending) {
-        if (_messages.any((m) => m.id == p.tempId)) continue;
-        _messages.add(Message(
-          id: p.tempId,
-          content: p.content,
-          senderId: p.senderId,
-          senderName: p.senderName,
-          timestamp: p.createdAt,
-          status: MessageStatus.sending,
-        ));
-      }
-      _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    });
-    _scrollToBottom();
+    if (mounted && pending.isNotEmpty) {
+      setState(() {
+        for (final p in pending) {
+          if (_messages.any((m) => m.id == p.tempId)) continue;
+          _messages.add(Message(
+            id: p.tempId,
+            clientMessageId: p.clientMessageId,
+            content: p.content,
+            senderId: p.senderId,
+            senderName: p.senderName,
+            timestamp: p.createdAt,
+            status: MessageStatus.sending,
+          ));
+        }
+        _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      });
+      _scrollToBottom();
+    }
+    await _applyDeadLetters();
   }
 
-  /// [otherReadAt] is how far the other side has actually read, straight from
-  /// the server (GroupMember.lastReadAt) — not a guess. Without it every
-  /// reload used to hardcode all of your own past messages to a blue tick
-  /// regardless of whether the recipient ever opened the chat.
-  Message _messageFrom(Map<String, dynamic> json, {DateTime? otherReadAt}) {
+  /// Anything the server permanently rejected (4xx) since this screen was
+  /// last open — previously these just silently vanished from the queue
+  /// while their bubble stayed stuck on the sending clock forever.
+  Future<void> _applyDeadLetters() async {
+    final dead = await Outbox.takeDeadFor(widget.roomId);
+    if (!mounted || dead.isEmpty) return;
+    setState(() {
+      for (final d in dead) {
+        final idx = _messages.indexWhere((m) => m.id == d.tempId);
+        if (idx != -1) _messages[idx].failed = true;
+      }
+    });
+  }
+
+  /// Server now returns a real per-message `status` (from persisted
+  /// MessageReceipt rows) directly — no more client-side timestamp math
+  /// against a room-level approximation.
+  Message _messageFrom(Map<String, dynamic> json) {
     MessageStatus status;
     if (json['senderId'] == widget.user.id) {
-      final ts = DateTime.tryParse(json['timestamp']?.toString() ?? '');
-      status = (otherReadAt != null && ts != null && !ts.isAfter(otherReadAt))
-          ? MessageStatus.read
-          : MessageStatus.delivered;
+      switch (json['status']) {
+        case 'read': status = MessageStatus.read; break;
+        case 'delivered': status = MessageStatus.delivered; break;
+        default: status = MessageStatus.sent;
+      }
     } else {
       status = MessageStatus.delivered;
     }
@@ -201,6 +236,19 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _socket!.on('new_message', (data) {
         if (!mounted) return;
         final raw = Map<String, dynamic>.from(data);
+        final seq = raw['seq'] is int ? raw['seq'] as int : int.tryParse('${raw['seq']}');
+        if (seq != null) {
+          if (_lastSeq != null && seq > _lastSeq! + 1) {
+            // Gap detected — something broadcast while this socket was
+            // disconnected/reconnecting and was never replayed. A full
+            // reload is the only correct recovery; the fresh history fetch
+            // this triggers will also pick up whatever caused the gap.
+            _lastSeq = seq;
+            _loadHistory();
+            return;
+          }
+          _lastSeq = seq;
+        }
         final msg = Message.fromSocket(raw);
         if (msg.senderId == widget.user.id) return; // our own echo — already shown optimistically
         if (_messages.any((m) => m.id == msg.id)) return; // duplicate after reconnect/history overlap
@@ -210,6 +258,50 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         // The screen is open and the new message just got painted — that's a
         // read, not just a delivery, so tell the sender right away.
         _socket!.emit('room_read', {'roomId': widget.roomId, 'userId': widget.user.id});
+      });
+      // The sender edited this message — update it in place wherever it
+      // currently sits in the list.
+      _socket!.on('message_edited', (data) {
+        if (!mounted) return;
+        final d = Map<String, dynamic>.from(data);
+        if (d['roomId'] != widget.roomId) return;
+        setState(() {
+          final idx = _messages.indexWhere((m) => m.id == d['messageId']);
+          if (idx != -1) {
+            _messages[idx].content = d['content'] as String? ?? _messages[idx].content;
+            _messages[idx].isEdited = true;
+            _messages[idx].editedAt = DateTime.tryParse(d['editedAt']?.toString() ?? '')?.toLocal();
+          }
+        });
+      });
+      // Deleted for everyone — render as a tombstone rather than removing it,
+      // matching what every other client in the room now sees.
+      _socket!.on('message_deleted', (data) {
+        if (!mounted) return;
+        final d = Map<String, dynamic>.from(data);
+        if (d['roomId'] != widget.roomId) return;
+        setState(() {
+          final idx = _messages.indexWhere((m) => m.id == d['messageId']);
+          if (idx != -1) { _messages[idx].deleted = true; _messages[idx].content = ''; }
+        });
+      });
+      _socket!.on('reaction_added', (data) {
+        if (!mounted) return;
+        final d = Map<String, dynamic>.from(data);
+        if (d['roomId'] != widget.roomId) return;
+        setState(() {
+          final idx = _messages.indexWhere((m) => m.id == d['messageId']);
+          if (idx != -1) _messages[idx].reactions[d['userId'].toString()] = d['emoji'].toString();
+        });
+      });
+      _socket!.on('reaction_removed', (data) {
+        if (!mounted) return;
+        final d = Map<String, dynamic>.from(data);
+        if (d['roomId'] != widget.roomId) return;
+        setState(() {
+          final idx = _messages.indexWhere((m) => m.id == d['messageId']);
+          if (idx != -1) _messages[idx].reactions.remove(d['userId'].toString());
+        });
       });
       // Upgrade our own sent message(s) from single to double grey tick once the
       // server confirms someone else's socket is in the room.
@@ -322,6 +414,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _sendMessage() {
     final content = _msgCtrl.text.trim();
     if (content.isEmpty) return;
+
+    if (_editingMessage != null) {
+      _submitEdit(_editingMessage!, content);
+      return;
+    }
+
     final replyTo = _replyingTo; // capture before setState clears it
     final msg = Message(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -336,13 +434,39 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _sendViaHttp(msg, replyTo);
   }
 
+  Future<void> _submitEdit(Message original, String newContent) async {
+    setState(() { _editingMessage = null; });
+    _msgCtrl.clear();
+    try {
+      final res = await http.patch(
+        Uri.parse('http://${Config.baseUrl}/api/v1/messages/${widget.roomId}/${original.id}'),
+        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+        body: jsonEncode({'content': newContent}),
+      ).timeout(const Duration(seconds: 10));
+      if (!mounted) return;
+      if (res.statusCode == 200) {
+        setState(() {
+          original.content = newContent;
+          original.isEdited = true;
+          original.editedAt = DateTime.now();
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not edit message'), behavior: SnackBarBehavior.floating));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not edit message — check connection'), behavior: SnackBarBehavior.floating));
+      }
+    }
+  }
+
   Future<void> _sendViaHttp(Message msg, Message? replyTo) async {
     try {
       final body = <String, dynamic>{
         'content': msg.content,
-        'senderId': widget.user.id,
-        'senderName': widget.user.fullName,
-        'tenantId': widget.user.tenant['id'],
+        'clientMessageId': msg.clientMessageId,
       };
       if (replyTo != null) body['replyToId'] = replyTo.id;
 
@@ -356,7 +480,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       ).timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
-      if (res.statusCode == 201) {
+      // 200 = idempotent retry: the server recognized clientMessageId from an
+      // earlier attempt and handed back what it already persisted, rather
+      // than creating a duplicate. Treated identically to a fresh 201.
+      if (res.statusCode == 201 || res.statusCode == 200) {
         // Adopt the server's UUID — replying to or deleting this message sends
         // the id back, and the temporary local one would be rejected.
         final sent = (jsonDecode(res.body)['message'] as Map?)?.cast<String, dynamic>();
@@ -370,12 +497,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         // assignment here would silently drag a blue tick back to grey.
         setState(() => msg.upgradeStatus(MessageStatus.sent));
         if (sent != null) await ChatCache.appendMessage(widget.roomId, sent);
+      } else {
+        // The server understood and definitively refused it (4xx) — this is
+        // not "still trying," it's failed. Previously this fell through to
+        // silence: the bubble just sat on the sending clock forever.
+        if (mounted) setState(() => msg.failed = true);
       }
     } catch (_) {
       // No network. Persist it so it survives leaving the screen or killing the
       // app, and send it when the connection comes back.
       await Outbox.enqueue(PendingMessage(
         tempId: msg.id,
+        clientMessageId: msg.clientMessageId,
         roomId: widget.roomId,
         content: msg.content,
         senderId: widget.user.id,
@@ -412,6 +545,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       await ChatCache.appendMessage(widget.roomId, entry.value);
     }
     if (mounted && !result.stillOffline) setState(() => _isOffline = false);
+    await _applyDeadLetters();
   }
 
   // ── Attachment handlers ────────────────────────────────────────────────────
@@ -471,16 +605,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         Uri.parse('$baseUrl/api/v1/messages/${widget.roomId}/media'),
       )
         ..headers['Authorization'] = 'Bearer ${widget.token}'
-        ..fields['senderId'] = widget.user.id
-        ..fields['senderName'] = widget.user.fullName
-        ..fields['tenantId'] = widget.user.tenant['id']?.toString() ?? ''
+        ..fields['clientMessageId'] = msg.clientMessageId
         ..files.add(await http.MultipartFile.fromPath('file', file.path));
 
       final streamed = await req.send().timeout(const Duration(seconds: 60));
 
       if (!mounted) return;
 
-      if (streamed.statusCode == 201) {
+      if (streamed.statusCode == 201 || streamed.statusCode == 200) {
         // Parse the response to get the served URL and update the bubble
         final body = await streamed.stream.bytesToString();
         final decoded = jsonDecode(body) as Map<String, dynamic>;
@@ -499,9 +631,17 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         // assignment here would silently drag a blue tick back to grey.
         setState(() => msg.upgradeStatus(MessageStatus.sent));
         if (sent != null) await ChatCache.appendMessage(widget.roomId, sent);
+      } else {
+        // Definitively refused, not just slow — an image send has no offline
+        // queue (the Outbox doc explains why: the file might not survive to
+        // flush time), so this is the terminal state for a failed one.
+        if (mounted) setState(() => msg.failed = true);
       }
     } catch (_) {
-      // Network error — stays in sending state so user knows it failed
+      // Network error — no offline queue for media, so this is as far as it
+      // gets. failed (not "stays sending") tells the user it needs a retry,
+      // not that it's still in flight.
+      if (mounted) setState(() => msg.failed = true);
     }
   }
 
@@ -517,6 +657,71 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
   }
 
+  Future<void> _toggleMute() async {
+    final next = !_muted;
+    setState(() => _muted = next); // optimistic — it's just a per-user preference
+    try {
+      final res = await http.patch(
+        Uri.parse('http://${Config.baseUrl}/api/v1/student/rooms/${widget.roomId}/mute'),
+        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+        body: jsonEncode({'muted': next}),
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200 && mounted) setState(() => _muted = !next); // roll back
+    } catch (_) {
+      if (mounted) setState(() => _muted = !next);
+    }
+  }
+
+  Future<void> _performSearch(String query) async {
+    if (query.trim().length < 2) {
+      setState(() => _searchResults = []);
+      return;
+    }
+    setState(() => _searchLoading = true);
+    try {
+      final res = await http.get(
+        Uri.parse('http://${Config.baseUrl}/api/v1/messages/${widget.roomId}/search?q=${Uri.encodeQueryComponent(query.trim())}'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      ).timeout(const Duration(seconds: 10));
+      if (!mounted) return;
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        setState(() {
+          _searchResults = (data['results'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+          _searchLoading = false;
+        });
+      } else {
+        setState(() => _searchLoading = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _searchLoading = false);
+    }
+  }
+
+  void _closeSearch() {
+    setState(() { _searching = false; _searchResults = []; _searchCtrl.clear(); });
+  }
+
+  /// Jump to a result if it's already loaded in this session's window;
+  /// otherwise there's no in-place scroll-to-message across a paginated
+  /// history, so the honest fallback is to say so rather than silently do
+  /// nothing.
+  void _jumpToSearchResult(Map<String, dynamic> result) {
+    final id = result['id'] as String?;
+    final idx = _messages.indexWhere((m) => m.id == id);
+    _closeSearch();
+    if (idx == -1) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('That message is further back in history — scroll up to find it'),
+        behavior: SnackBarBehavior.floating));
+      return;
+    }
+    _scrollCtrl.animateTo(
+      (idx / _messages.length) * _scrollCtrl.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 400), curve: Curves.easeOut,
+    );
+  }
+
   void _comingSoon(String feature) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('$feature coming soon'),
@@ -528,6 +733,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   void _showMessageOptions(BuildContext context, Message msg) {
+    if (msg.deleted) return; // nothing to do with a tombstone
+    final isMine = msg.senderId == widget.user.id;
     showModalBottomSheet(
       context: context,
       backgroundColor: context.cl.surface,
@@ -545,10 +752,17 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: ['👍', '❤️', '😂', '😮', '😢', '🙏'].map((e) =>
                   GestureDetector(
-                    onTap: () => Navigator.pop(context),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _toggleReaction(msg, e);
+                    },
                     child: Container(
                       padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: context.cl.card, shape: BoxShape.circle),
+                      decoration: BoxDecoration(
+                        color: msg.reactions[widget.user.id] == e
+                            ? AppColors.brand.withValues(alpha: 0.2) : context.cl.card,
+                        shape: BoxShape.circle,
+                      ),
                       child: Text(e, style: const TextStyle(fontSize: 24)),
                     ),
                   ),
@@ -565,15 +779,83 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Copied'), behavior: SnackBarBehavior.floating));
             }),
-            if (msg.senderId == widget.user.id)
-              _optionTile(context, Icons.delete_outline_rounded, 'Delete', () {
-                setState(() => _messages.remove(msg)); Navigator.pop(context);
+            if (isMine && !msg.isImage)
+              _optionTile(context, Icons.edit_outlined, 'Edit', () {
+                Navigator.pop(context);
+                setState(() {
+                  _editingMessage = msg;
+                  _replyingTo = null;
+                  _msgCtrl.text = msg.content;
+                  _msgCtrl.selection = TextSelection.collapsed(offset: msg.content.length);
+                });
+              }),
+            _optionTile(context, Icons.delete_outline_rounded, 'Delete for me', () {
+              setState(() => _messages.remove(msg)); Navigator.pop(context);
+            }, isDestructive: true),
+            if (isMine)
+              _optionTile(context, Icons.delete_forever_rounded, 'Delete for everyone', () {
+                Navigator.pop(context);
+                _deleteForEveryone(msg);
               }, isDestructive: true),
             _optionTile(context, Icons.info_outline_rounded, 'Message info', () => Navigator.pop(context)),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _toggleReaction(Message msg, String emoji) async {
+    final mine = widget.user.id;
+    final removing = msg.reactions[mine] == emoji;
+    setState(() {
+      if (removing) {
+        msg.reactions.remove(mine);
+      } else {
+        msg.reactions[mine] = emoji;
+      }
+    });
+    try {
+      if (removing) {
+        await http.delete(
+          Uri.parse('http://${Config.baseUrl}/api/v1/messages/${widget.roomId}/${msg.id}/reaction'),
+          headers: {'Authorization': 'Bearer ${widget.token}'},
+        ).timeout(const Duration(seconds: 10));
+      } else {
+        await http.put(
+          Uri.parse('http://${Config.baseUrl}/api/v1/messages/${widget.roomId}/${msg.id}/reaction'),
+          headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+          body: jsonEncode({'emoji': emoji}),
+        ).timeout(const Duration(seconds: 10));
+      }
+    } catch (_) {
+      // Best-effort — the socket event from another device or a future
+      // reload will reconcile if this particular request didn't land.
+    }
+  }
+
+  Future<void> _deleteForEveryone(Message msg) async {
+    final removedAt = _messages.indexOf(msg);
+    setState(() { msg.deleted = true; msg.content = ''; });
+    try {
+      final res = await http.delete(
+        Uri.parse('http://${Config.baseUrl}/api/v1/messages/${widget.roomId}/${msg.id}'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200 && mounted) {
+        // Roll back — the server didn't accept it (e.g. it wasn't actually
+        // this user's message by the time the request landed).
+        setState(() {
+          if (removedAt >= 0 && removedAt < _messages.length) _messages[removedAt].deleted = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not delete message'), behavior: SnackBarBehavior.floating));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not delete message — check connection'), behavior: SnackBarBehavior.floating));
+      }
+    }
   }
 
   Widget _optionTile(BuildContext context, IconData icon, String label, VoidCallback onTap,
@@ -595,7 +877,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     if (ActiveChatTracker.currentRoomId == widget.roomId) {
       ActiveChatTracker.currentRoomId = null;
     }
-    _msgCtrl.dispose(); _scrollCtrl.dispose(); _typingCtrl.dispose();
+    _msgCtrl.dispose(); _scrollCtrl.dispose(); _typingCtrl.dispose(); _searchCtrl.dispose();
     _typingClearTimer?.cancel();
     // Tell the peer we stopped typing before the socket drops, otherwise their
     // indicator hangs until its own timeout fires.
@@ -608,7 +890,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: _buildAppBar(context),
-      body: ChatWallpaperView(
+      body: Stack(
+        children: [
+          ChatWallpaperView(
         child: Column(
         children: [
           Expanded(
@@ -642,7 +926,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-          if (_replyingTo != null) _buildReplyPreview(context),
+          if (_editingMessage != null) _buildEditPreview(context)
+          else if (_replyingTo != null) _buildReplyPreview(context),
           _buildInputBar(context),
           // ── Inline attachment panel (WhatsApp-style, below input bar) ──
           AnimatedSize(
@@ -667,7 +952,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           ),
         ],
       ),
-      ),  // ChatWallpaperView
+          ),  // ChatWallpaperView
+          if (_searching) _buildSearchOverlay(context),
+        ],
+      ),
     );
   }
 
@@ -792,6 +1080,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           onSelected: (val) {
             if (val == 'wallpaper') _showWallpaperPicker();
+            if (val == 'search') setState(() => _searching = true);
+            if (val == 'mute') _toggleMute();
           },
           itemBuilder: (_) => [
             PopupMenuItem(
@@ -813,9 +1103,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             PopupMenuItem(
               value: 'mute',
               child: Row(children: [
-                Icon(Icons.notifications_off_rounded, color: context.cl.textHint, size: 20),
+                Icon(_muted ? Icons.notifications_active_rounded : Icons.notifications_off_rounded,
+                    color: context.cl.textHint, size: 20),
                 const SizedBox(width: 12),
-                Text('Mute notifications', style: TextStyle(color: context.cl.text, fontSize: 14)),
+                Text(_muted ? 'Unmute notifications' : 'Mute notifications',
+                    style: TextStyle(color: context.cl.text, fontSize: 14)),
               ]),
             ),
           ],
@@ -842,8 +1134,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   Widget _buildMessage(BuildContext context, Message msg, bool isMe, bool sameSenderAsPrev) {
     return GestureDetector(
-      onLongPress: () => _showMessageOptions(context, msg),
-      onHorizontalDragEnd: (d) {
+      onLongPress: msg.deleted ? null : () => _showMessageOptions(context, msg),
+      onHorizontalDragEnd: msg.deleted ? null : (d) {
         if (d.primaryVelocity != null && d.primaryVelocity! > 200) setState(() => _replyingTo = msg);
       },
       child: Padding(
@@ -889,7 +1181,19 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     bottomLeft: Radius.circular(isMe ? 16 : 0),
                     bottomRight: Radius.circular(isMe ? 0 : 16),
                   ),
-                  child: msg.isImage
+                  child: msg.deleted
+                      ? Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.block_rounded, size: 15,
+                                color: isMe ? Colors.black.withValues(alpha: 0.5) : context.cl.textHint),
+                            const SizedBox(width: 6),
+                            Text('This message was deleted',
+                                style: TextStyle(fontSize: 14.5, fontStyle: FontStyle.italic,
+                                    color: isMe ? Colors.black.withValues(alpha: 0.5) : context.cl.textHint)),
+                          ]),
+                        )
+                      : msg.isImage
                       ? _buildImageBubbleContent(context, msg, isMe, sameSenderAsPrev)
                       : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -934,14 +1238,24 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                   color: isMe ? AppColors.bgMain : context.cl.text,
                                   height: 1.4,
                                 )),
+                            if (msg.reactions.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              _buildReactionsRow(context, msg, isMe),
+                            ],
                             const SizedBox(height: 4),
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                if (msg.isEdited) ...[
+                                  Text('edited',
+                                      style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic,
+                                          color: isMe ? Colors.black.withValues(alpha: 0.5) : context.cl.textHint)),
+                                  const SizedBox(width: 4),
+                                ],
                                 Text(formatMessageTime(msg.timestamp),
                                     style: TextStyle(fontSize: 11,
                                         color: isMe ? Colors.black.withValues(alpha: 0.5) : context.cl.textHint)),
-                                if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(msg.status)],
+                                if (isMe) ...[const SizedBox(width: 4), _buildStatusIcon(msg)],
                               ],
                             ),
                           ],
@@ -955,6 +1269,24 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildReactionsRow(BuildContext context, Message msg, bool isMe) {
+    // Group by emoji so 3 people reacting 👍 shows one chip with a count,
+    // not three identical chips.
+    final counts = <String, int>{};
+    for (final e in msg.reactions.values) { counts[e] = (counts[e] ?? 0) + 1; }
+    return Wrap(
+      spacing: 4,
+      children: counts.entries.map((e) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: isMe ? Colors.black.withValues(alpha: 0.15) : context.cl.cardLight,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text('${e.key} ${e.value}', style: const TextStyle(fontSize: 12)),
+      )).toList(),
     );
   }
 
@@ -984,8 +1316,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildStatusIcon(MessageStatus status) {
-    switch (status) {
+  Widget _buildStatusIcon(Message msg) {
+    // Distinct from "sending" — the server definitively refused this one,
+    // not "still trying." Previously there was no way to tell the two apart.
+    if (msg.failed) return const Icon(Icons.error_outline_rounded, size: 14, color: AppColors.error);
+    switch (msg.status) {
       case MessageStatus.sending:
         // A clock, not a spinner: a queued message may sit here for hours until
         // the network returns, and a spinner would promise it's on its way.
@@ -999,8 +1334,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
   }
 
-  Widget _buildStatusIconOnImage(MessageStatus status) {
-    switch (status) {
+  Widget _buildStatusIconOnImage(Message msg) {
+    if (msg.failed) return const Icon(Icons.error_outline_rounded, size: 14, color: Color(0xFFFF8A80));
+    switch (msg.status) {
       case MessageStatus.sending:
         return const Icon(Icons.schedule_rounded, size: 14, color: Colors.white70);
       case MessageStatus.sent:
@@ -1098,7 +1434,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               ),
               if (isMe) ...[
                 const SizedBox(width: 3),
-                _buildStatusIconOnImage(msg.status),
+                _buildStatusIconOnImage(msg),
               ],
             ],
           ),
@@ -1173,6 +1509,88 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             onPressed: () => setState(() => _replyingTo = null),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEditPreview(BuildContext context) {
+    return Container(
+      color: context.cl.surface,
+      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+      child: Row(
+        children: [
+          Icon(Icons.edit_outlined, size: 18, color: AppColors.brand),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text('Editing message',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.brand)),
+          ),
+          IconButton(
+            icon: Icon(Icons.close, size: 20, color: context.cl.textHint),
+            onPressed: () => setState(() { _editingMessage = null; _msgCtrl.clear(); }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchOverlay(BuildContext context) {
+    return Positioned.fill(
+      child: Material(
+        color: context.cl.bg,
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(children: [
+                  IconButton(icon: Icon(Icons.arrow_back_ios_rounded, color: context.cl.text), onPressed: _closeSearch),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchCtrl,
+                      autofocus: true,
+                      onChanged: _performSearch,
+                      style: TextStyle(color: context.cl.text, fontSize: 16),
+                      decoration: InputDecoration(
+                        hintText: 'Search this chat...',
+                        hintStyle: TextStyle(color: context.cl.textHint),
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                  if (_searchLoading)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 12),
+                      child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                    ),
+                ]),
+              ),
+              Divider(height: 1, color: context.cl.divider),
+              Expanded(
+                child: _searchResults.isEmpty
+                    ? Center(
+                        child: Text(
+                          _searchCtrl.text.trim().length < 2 ? 'Type at least 2 characters' : 'No matches',
+                          style: TextStyle(color: context.cl.textHint),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _searchResults.length,
+                        itemBuilder: (_, i) {
+                          final r = _searchResults[i];
+                          return ListTile(
+                            title: Text(r['senderName'] as String? ?? 'Unknown',
+                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: context.cl.text)),
+                            subtitle: Text(r['content'] as String? ?? '', maxLines: 2, overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: context.cl.textSec)),
+                            onTap: () => _jumpToSearchResult(r),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

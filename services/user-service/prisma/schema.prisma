@@ -60,6 +60,7 @@ model User {
   groups            GroupMember[]
   messages          Message[]
   messageReceipts   MessageReceipt[]
+  messageReactions  MessageReaction[]
   sessions          Session[]
   createdGroups     Group[]             @relation("GroupCreator")
   taughtAssignments TeacherAssignment[] @relation("TeacherAssignments")
@@ -145,6 +146,9 @@ model GroupMember {
   role       String    @default("member")
   joinedAt   DateTime  @default(now())
   lastReadAt DateTime?
+  // This member's own mute preference for this room — never touches whether
+  // anyone else in the room gets notified, purely a per-recipient UI switch.
+  muted      Boolean   @default(false)
 
   group Group @relation(fields: [groupId], references: [id])
   user  User  @relation(fields: [userId], references: [id])
@@ -162,15 +166,27 @@ model Message {
   type      String   @default("text")
   metadata  Json     @default("{}")
   isEdited  Boolean  @default(false)
+  editedAt  DateTime?
+  // Soft delete for "delete for everyone" — content is cleared and replaced
+  // with a tombstone at the API layer, row stays (preserves ordering/replies
+  // pointing at it) but every client renders it as removed.
+  deletedAt DateTime?
+  // Client-generated UUID, set once at compose time and resent unchanged on
+  // every retry. Lets the server tell "this exact send, retried after a lost
+  // response" apart from "a new message that happens to have similar
+  // content" — the send endpoint upserts on this key instead of blindly
+  // inserting, so a retried send can never create a duplicate message.
+  clientMessageId String?  @unique
   replyToId String?  @db.Uuid
   createdAt DateTime @default(now())
 
-  tenant   Tenant           @relation(fields: [tenantId], references: [id])
-  group    Group            @relation(fields: [groupId], references: [id])
-  sender   User             @relation(fields: [senderId], references: [id])
-  replyTo  Message?         @relation("MessageReplies", fields: [replyToId], references: [id])
-  replies  Message[]        @relation("MessageReplies")
-  receipts MessageReceipt[]
+  tenant    Tenant            @relation(fields: [tenantId], references: [id])
+  group     Group             @relation(fields: [groupId], references: [id])
+  sender    User              @relation(fields: [senderId], references: [id])
+  replyTo   Message?          @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies   Message[]         @relation("MessageReplies")
+  receipts  MessageReceipt[]
+  reactions MessageReaction[]
 
   @@index([groupId])
   // The hot path for chat history is "this room's messages, in order" — the
@@ -188,8 +204,9 @@ model Message {
 // approximated on reload from a single room-level GroupMember.lastReadAt
 // timestamp, which can't distinguish messages sent before vs. after that
 // timestamp landed and has no per-message precision at all. One row per
-// (message, recipient) — created lazily by the service layer, not eagerly
-// for every member on send, to avoid a write storm on large groups.
+// (message, recipient), created eagerly for every other room member at send
+// time — simplest correct design at this app's scale (campus-sized rooms,
+// not broadcast channels with thousands of members).
 model MessageReceipt {
   messageId   String    @db.Uuid
   userId      String    @db.Uuid
@@ -202,6 +219,23 @@ model MessageReceipt {
   @@id([messageId, userId])
   @@index([userId])
   @@map("message_receipts")
+}
+
+// One active reaction per user per message — tapping a different emoji
+// replaces it, matching WhatsApp/Telegram rather than Discord's
+// multi-reaction model, since that's the simpler and more familiar pattern
+// for this product.
+model MessageReaction {
+  messageId String   @db.Uuid
+  userId    String   @db.Uuid
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@id([messageId, userId])
+  @@map("message_reactions")
 }
 
 model Session {
