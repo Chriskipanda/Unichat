@@ -180,6 +180,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         'transports': ['websocket', 'polling'], 'autoConnect': true,
         'reconnection': true, 'reconnectionAttempts': 1000000,
         'reconnectionDelay': 1000, 'reconnectionDelayMax': 5000,
+        // 'auth' (not just extraHeaders) because browsers strip custom
+        // headers off the actual websocket upgrade — auth.token is part of
+        // the socket.io handshake payload itself, so it survives on every
+        // transport. The server now rejects any socket without it.
+        'auth': {'token': widget.token},
         'extraHeaders': {'Authorization': 'Bearer ${widget.token}'},
       });
       // Re-join on every connect, not just the first — a reconnect starts a new
@@ -215,8 +220,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         final messageId = d['messageId'];
         setState(() {
           for (final m in _messages) {
-            if (m.id == messageId && m.senderId == widget.user.id && m.status == MessageStatus.sent) {
-              m.status = MessageStatus.delivered;
+            if (m.id == messageId && m.senderId == widget.user.id) {
+              m.upgradeStatus(MessageStatus.delivered);
             }
           }
         });
@@ -233,9 +238,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         if (d['roomId'] != widget.roomId) return;
         setState(() {
           for (final m in _messages) {
-            if (m.senderId == widget.user.id && m.status == MessageStatus.sent) {
-              m.status = MessageStatus.delivered;
-            }
+            if (m.senderId == widget.user.id) m.upgradeStatus(MessageStatus.delivered);
           }
         });
       });
@@ -247,9 +250,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         if (d['roomId'] != widget.roomId || d['userId'] == widget.user.id) return;
         setState(() {
           for (final m in _messages) {
-            if (m.senderId == widget.user.id && m.status != MessageStatus.read) {
-              m.status = MessageStatus.read;
-            }
+            if (m.senderId == widget.user.id) m.upgradeStatus(MessageStatus.read);
           }
         });
       });
@@ -257,7 +258,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         'transports': ['websocket', 'polling'], 'autoConnect': true, 'path': '/presence/',
         'reconnection': true, 'reconnectionAttempts': 1000000,
         'reconnectionDelay': 1000, 'reconnectionDelayMax': 5000,
-        'query': {'userId': widget.user.id, 'tenantId': widget.user.tenant['id']},
+        // Identity now comes from the verified JWT, not a client-claimed
+        // query string — the server derives userId/tenantId itself.
+        'auth': {'token': widget.token},
       });
       // Presence relays typing with socket.to(roomId), so this socket must be a
       // member of the room to receive anything.
@@ -361,8 +364,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         if (serverId != null) msg.id = serverId;
         // Single grey tick — real delivered/read promotion comes from the
         // server via 'message_delivered'/'peer_read' (see _connectSocket),
-        // not a guess-and-hope timer.
-        setState(() => msg.status = MessageStatus.sent);
+        // not a guess-and-hope timer. upgradeStatus (not a direct assignment)
+        // because this 201 can resolve *after* a delivered/read receipt for
+        // the same message already arrived over the socket — a plain
+        // assignment here would silently drag a blue tick back to grey.
+        setState(() => msg.upgradeStatus(MessageStatus.sent));
         if (sent != null) await ChatCache.appendMessage(widget.roomId, sent);
       }
     } catch (_) {
@@ -399,7 +405,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       final serverId = entry.value['id'] as String?;
       setState(() {
         if (serverId != null) delivered.id = serverId;
-        delivered.status = MessageStatus.sent;
+        // Same reasoning as the direct-send path: a receipt event for this
+        // message may have already landed while it sat queued offline.
+        delivered.upgradeStatus(MessageStatus.sent);
       });
       await ChatCache.appendMessage(widget.roomId, entry.value);
     }
@@ -485,8 +493,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         if (serverId != null) msg.id = serverId;
         // Single grey tick — real delivered/read promotion comes from the
         // server via 'message_delivered'/'peer_read' (see _connectSocket),
-        // not a guess-and-hope timer.
-        setState(() => msg.status = MessageStatus.sent);
+        // not a guess-and-hope timer. upgradeStatus (not a direct assignment)
+        // because this 201 can resolve *after* a delivered/read receipt for
+        // the same message already arrived over the socket — a plain
+        // assignment here would silently drag a blue tick back to grey.
+        setState(() => msg.upgradeStatus(MessageStatus.sent));
         if (sent != null) await ChatCache.appendMessage(widget.roomId, sent);
       }
     } catch (_) {

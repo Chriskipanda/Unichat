@@ -158,6 +158,15 @@ class Message {
 
   bool get isImage => localImagePath != null || imageUrl != null;
 
+  /// The only sanctioned way to move status forward. sending → sent →
+  /// delivered → read is a one-way progression — a slow HTTP response or a
+  /// replayed outbox flush racing a socket receipt event must never be able
+  /// to stamp an older status over a newer one (e.g. downgrading a message
+  /// the peer already read back down to merely "sent").
+  void upgradeStatus(MessageStatus next) {
+    if (next.index > status.index) status = next;
+  }
+
   static String get _origin =>
       Config.baseUrl.startsWith('http') ? Config.baseUrl : 'http://${Config.baseUrl}';
 

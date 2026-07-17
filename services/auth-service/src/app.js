@@ -15,9 +15,19 @@ const kafka = new Kafka({
 });
 const producer = kafka.producer();
 
-fastify.register(require('@fastify/cors'), { origin: true, credentials: true });
-fastify.register(require('@fastify/jwt'), {
-  secret: process.env.JWT_SECRET || 'super_secret_unichat_key',
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET is not set. Refusing to start with an insecure default.');
+  process.exit(1);
+}
+
+// credentials:true + a reflected origin is the classic wildcard-with-cookies
+// anti-pattern — this API is bearer-token-only (no cookie auth anywhere),
+// so there's no cookie to protect and no reason to opt into it.
+fastify.register(require('@fastify/cors'), { origin: true, credentials: false });
+fastify.register(require('@fastify/jwt'), { secret: process.env.JWT_SECRET });
+fastify.register(require('@fastify/rate-limit'), {
+  max: 100,
+  timeWindow: '1 minute',
 });
 
 // ─────────────────────────────────────────────────────────────────
@@ -83,7 +93,7 @@ fastify.get('/api/v1/auth/institutions', async () => {
 // ─────────────────────────────────────────────────────────────────
 // SuperAdmin — password login
 // ─────────────────────────────────────────────────────────────────
-fastify.post('/api/v1/auth/admin/login', async (request, reply) => {
+fastify.post('/api/v1/auth/admin/login', { config: { rateLimit: { max: 10, timeWindow: '5 minutes' } } }, async (request, reply) => {
   const { email, password } = request.body || {};
   if (!email || !password)
     return reply.code(400).send({ error: 'Email and password are required' });
@@ -111,7 +121,10 @@ fastify.post('/api/v1/auth/admin/login', async (request, reply) => {
 // ─────────────────────────────────────────────────────────────────
 // Institution Admin — OTP login (role-gated to 'admin')
 // ─────────────────────────────────────────────────────────────────
-fastify.post('/api/v1/auth/institution/request-otp', async (request, reply) => {
+const OTP_REQUEST_LIMIT = { config: { rateLimit: { max: 5, timeWindow: '5 minutes' } } };
+const OTP_VERIFY_LIMIT = { config: { rateLimit: { max: 10, timeWindow: '5 minutes' } } };
+
+fastify.post('/api/v1/auth/institution/request-otp', OTP_REQUEST_LIMIT, async (request, reply) => {
   const { identifier, tenantSlug } = request.body || {};
   if (!identifier || !tenantSlug)
     return reply.code(400).send({ error: 'Identifier and institution slug required' });
@@ -143,7 +156,7 @@ fastify.post('/api/v1/auth/institution/request-otp', async (request, reply) => {
   return { message: 'OTP sent', user: { fullName: user.fullName, email: user.email } };
 });
 
-fastify.post('/api/v1/auth/institution/verify-otp', async (request, reply) => {
+fastify.post('/api/v1/auth/institution/verify-otp', OTP_VERIFY_LIMIT, async (request, reply) => {
   const { identifier, tenantSlug, otp } = request.body || {};
 
   const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
@@ -187,7 +200,7 @@ fastify.post('/api/v1/auth/institution/verify-otp', async (request, reply) => {
 // ─────────────────────────────────────────────────────────────────
 // Teacher — OTP login (role-gated to teacher/lecturer/staff)
 // ─────────────────────────────────────────────────────────────────
-fastify.post('/api/v1/auth/teacher/request-otp', async (request, reply) => {
+fastify.post('/api/v1/auth/teacher/request-otp', OTP_REQUEST_LIMIT, async (request, reply) => {
   const { identifier, tenantSlug } = request.body || {};
   if (!identifier || !tenantSlug)
     return reply.code(400).send({ error: 'Identifier and institution slug required' });
@@ -219,7 +232,7 @@ fastify.post('/api/v1/auth/teacher/request-otp', async (request, reply) => {
   return { message: 'OTP sent', user: { fullName: user.fullName, email: user.email } };
 });
 
-fastify.post('/api/v1/auth/teacher/verify-otp', async (request, reply) => {
+fastify.post('/api/v1/auth/teacher/verify-otp', OTP_VERIFY_LIMIT, async (request, reply) => {
   const { identifier, tenantSlug, otp } = request.body || {};
 
   const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
@@ -1429,7 +1442,7 @@ fastify.post('/api/v1/auth/register', async (request, reply) => {
   return { message: 'User registered and enrollment triggered', user };
 });
 
-fastify.post('/api/v1/auth/request-otp', async (request, reply) => {
+fastify.post('/api/v1/auth/request-otp', OTP_REQUEST_LIMIT, async (request, reply) => {
   const { identifier, tenantSlug } = request.body;
   const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
   if (!tenant) return reply.code(404).send({ error: 'Institution not found' });
@@ -1462,7 +1475,7 @@ fastify.post('/api/v1/auth/request-otp', async (request, reply) => {
   };
 });
 
-fastify.post('/api/v1/auth/verify-otp', async (request, reply) => {
+fastify.post('/api/v1/auth/verify-otp', OTP_VERIFY_LIMIT, async (request, reply) => {
   const { identifier, tenantSlug, otp } = request.body;
   const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
   const user = await prisma.user.findFirst({

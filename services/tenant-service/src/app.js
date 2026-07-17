@@ -3,7 +3,29 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const Redis = require('ioredis');
 
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET is not set. Refusing to start with an insecure default.');
+  process.exit(1);
+}
+
+fastify.register(require('@fastify/jwt'), { secret: process.env.JWT_SECRET });
+
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+
+// Any tenant's branding used to be rewritable by anyone — this requires a
+// valid token AND either superadmin (any tenant) or that tenant's own admin.
+const brandingAuth = async (request, reply) => {
+  try {
+    await request.jwtVerify();
+  } catch {
+    return reply.code(401).send({ error: 'Invalid or expired token' });
+  }
+  const { role, tenantId } = request.user;
+  const { id } = request.params;
+  if (role === 'superadmin') return;
+  if (role === 'admin' && tenantId === id) return;
+  return reply.code(403).send({ error: 'Not authorized to modify this tenant' });
+};
 
 // Health check
 fastify.get('/api/v1/tenants/health', async (request, reply) => {
@@ -45,7 +67,7 @@ fastify.get('/api/v1/tenants/:slug', async (request, reply) => {
 /**
  * Update Tenant Branding (Admin only - simplified for now)
  */
-fastify.patch('/api/v1/tenants/:id/branding', async (request, reply) => {
+fastify.patch('/api/v1/tenants/:id/branding', { preHandler: brandingAuth }, async (request, reply) => {
   const { id } = request.params;
   const { branding } = request.body;
 

@@ -7,11 +7,24 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
+// Fail fast, not silently insecure: a missing JWT_SECRET must stop the
+// service from starting at all, never fall back to a secret that's public
+// in this repository's git history.
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET is not set. Refusing to start with an insecure default.');
+  process.exit(1);
+}
+
 // ── Upload directory ──────────────────────────────────────────────────────────
 const UPLOAD_DIR = '/app/uploads';
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 // Register plugins
+fastify.register(require('@fastify/jwt'), { secret: process.env.JWT_SECRET });
+fastify.register(require('@fastify/rate-limit'), {
+  max: 120,
+  timeWindow: '1 minute',
+});
 fastify.register(require('@fastify/multipart'), {
   limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB max
 });
@@ -19,6 +32,29 @@ fastify.register(require('@fastify/static'), {
   root: UPLOAD_DIR,
   prefix: '/api/v1/messages/uploads/',
 });
+
+// Every route below (except /health) requires a valid JWT. Identity for a
+// send/read always comes from the verified token, never from the request
+// body or query string — the client cannot claim to be another user.
+const bearerAuth = async (request, reply) => {
+  try {
+    await request.jwtVerify();
+    if (!request.user.tenantId) return reply.code(403).send({ error: 'No tenant scope' });
+  } catch {
+    return reply.code(401).send({ error: 'Invalid or expired token' });
+  }
+};
+
+// Send/read access to a room requires actual membership — not just a guessed
+// or known UUID. Used by both the HTTP routes and the socket layer so the
+// same rule applies everywhere a client can touch a room's messages.
+async function isRoomMember(groupId, userId) {
+  if (!groupId || !userId) return false;
+  const member = await prisma.groupMember.findUnique({
+    where: { groupId_userId: { groupId, userId } },
+  });
+  return !!member;
+}
 
 // Initialize Kafka
 const kafka = new Kafka({
@@ -76,131 +112,110 @@ fastify.get('/api/v1/messages/health', async (request, reply) => {
 
 /**
  * Upload a media attachment and broadcast it as a message
- * Accepts multipart/form-data with fields: senderId, senderName, tenantId + file
+ * Accepts multipart/form-data with a file. Sender identity comes from the JWT.
  */
-fastify.post('/api/v1/messages/:groupId/media', async (request, reply) => {
+fastify.post('/api/v1/messages/:groupId/media', { preHandler: bearerAuth }, async (request, reply) => {
   const { groupId } = request.params;
+  const { userId: senderId, tenantId } = request.user;
+
+  if (!(await isRoomMember(groupId, senderId))) {
+    return reply.code(403).send({ error: 'Not a member of this room' });
+  }
 
   // Parse multipart fields + file
   const parts = request.parts();
-  const fields = {};
   let savedPath = null;
   let originalName = 'file';
   let mimeType = 'application/octet-stream';
+  let filename = null;
 
   for await (const part of parts) {
     if (part.file) {
       // Determine extension from original filename
       const ext = path.extname(part.filename || '').toLowerCase() || '.bin';
       const uuid = crypto.randomUUID();
-      const filename = `${uuid}${ext}`;
+      filename = `${uuid}${ext}`;
       savedPath = path.join(UPLOAD_DIR, filename);
       originalName = part.filename || filename;
       mimeType = part.mimetype || mimeType;
 
-      // Stream file to disk
       const writeStream = fs.createWriteStream(savedPath);
       await new Promise((resolve, reject) => {
         part.file.pipe(writeStream);
         part.file.on('end', resolve);
         part.file.on('error', reject);
       });
-
-      fields._filename = filename; // store for URL building
-    } else {
-      fields[part.fieldname] = part.value;
     }
   }
 
-  if (!savedPath || !fields.senderId) {
-    return reply.code(400).send({ error: 'file and senderId are required' });
-  }
-
-  // Resolve tenantId
-  let tenantId = fields.tenantId;
-  if (!tenantId) {
-    try {
-      const group = await prisma.group.findUnique({ where: { id: groupId }, select: { tenantId: true } });
-      tenantId = group?.tenantId;
-    } catch (_) {}
+  if (!savedPath) {
+    return reply.code(400).send({ error: 'file is required' });
   }
 
   const messageId = crypto.randomUUID();
   const now = new Date();
-  const senderName = fields.senderName || 'Unknown';
 
-  // Determine message type from mime
   const isVideo = mimeType.startsWith('video/');
   const msgType = isVideo ? 'video' : 'image';
 
   // Relative URL — nginx routes /api/v1/messages/* to messaging_service
-  const fileUrl = `/api/v1/messages/uploads/${fields._filename}`;
+  const fileUrl = `/api/v1/messages/uploads/${filename}`;
 
-  // Persist to DB — store URL as content, type as 'image' or 'video'
+  const sender = await prisma.user.findUnique({
+    where: { id: senderId },
+    select: { fullName: true, avatarUrl: true },
+  });
+
   try {
     await prisma.message.create({
-      data: { id: messageId, tenantId, groupId, senderId: fields.senderId, content: fileUrl, type: msgType, createdAt: now },
+      data: { id: messageId, tenantId, groupId, senderId, content: fileUrl, type: msgType, createdAt: now },
     });
   } catch (err) {
     fastify.log.error(`Failed to persist media message: ${err.message}`);
     return reply.code(500).send({ error: 'Failed to save message' });
   }
 
-  // Fetch sender avatar for the broadcast payload
-  let senderAvatar = null;
-  try {
-    const sender = await prisma.user.findUnique({
-      where: { id: fields.senderId },
-      select: { avatarUrl: true },
-    });
-    senderAvatar = sender?.avatarUrl ?? null;
-  } catch (_) {}
-
   const payload = {
     id: messageId,
     roomId: groupId,
     content: fileUrl,
-    senderId: fields.senderId,
-    senderName,
-    senderAvatar,
+    senderId,
+    senderName: sender?.fullName ?? 'Unknown',
+    senderAvatar: sender?.avatarUrl ?? null,
     tenantId,
     timestamp: now.toISOString(),
     type: msgType,
     originalName,
   };
 
-  // Broadcast to all room members via socket (recipient sees it instantly)
   if (io) io.to(groupId).emit('new_message', payload);
   broadcastDelivered(groupId, messageId);
 
-  fastify.log.info(`[MEDIA] ${msgType} saved in room ${groupId} by ${senderName} — ${fields._filename}`);
+  fastify.log.info(`[MEDIA] ${msgType} saved in room ${groupId} by ${senderId}`);
   return reply.code(201).send({ message: payload });
 });
 
 /**
  * Send a Message (HTTP — reliable alternative to socket emit)
  */
-fastify.post('/api/v1/messages/:groupId', async (request, reply) => {
+fastify.post('/api/v1/messages/:groupId', { preHandler: bearerAuth }, async (request, reply) => {
   const { groupId } = request.params;
-  const { content, senderId, senderName = 'Unknown', tenantId: bodyTenantId, replyToId } = request.body || {};
+  const { userId: senderId, tenantId } = request.user;
+  const { content, replyToId } = request.body || {};
 
-  if (!content || !senderId) {
-    return reply.code(400).send({ error: 'content and senderId are required' });
+  if (!content) {
+    return reply.code(400).send({ error: 'content is required' });
   }
 
-  // Resolve tenantId from group when client omits it
-  let tenantId = bodyTenantId;
-  if (!tenantId) {
-    try {
-      const group = await prisma.group.findUnique({ where: { id: groupId }, select: { tenantId: true } });
-      tenantId = group?.tenantId;
-    } catch (_) {}
+  if (!(await isRoomMember(groupId, senderId))) {
+    return reply.code(403).send({ error: 'Not a member of this room' });
   }
 
-  const messageId = require('crypto').randomUUID();
+  const messageId = crypto.randomUUID();
   const now = new Date();
 
   const resolvedReplyToId = await resolveReplyToId(replyToId, groupId);
+  const sender = await prisma.user.findUnique({ where: { id: senderId }, select: { fullName: true } });
 
   let saved;
   try {
@@ -214,26 +229,30 @@ fastify.post('/api/v1/messages/:groupId', async (request, reply) => {
   }
 
   const payload = {
-    id: messageId, roomId: groupId, content, senderId, senderName,
+    id: messageId, roomId: groupId, content, senderId, senderName: sender?.fullName ?? 'Unknown',
     tenantId, replyToId: resolvedReplyToId, timestamp: now.toISOString(),
     type: 'text',
     replyTo: serializeReplyTo(saved.replyTo),
   };
 
-  // Broadcast to all sockets in the room
   if (io) io.to(groupId).emit('new_message', payload);
   broadcastDelivered(groupId, messageId);
 
-  fastify.log.info(`Message saved (HTTP) in room ${groupId} by ${senderName}`);
+  fastify.log.info(`Message saved (HTTP) in room ${groupId} by ${senderId}`);
   return reply.code(201).send({ message: payload });
 });
 
 /**
  * Get Message History for a Group
  */
-fastify.get('/api/v1/messages/:groupId', async (request, reply) => {
+fastify.get('/api/v1/messages/:groupId', { preHandler: bearerAuth }, async (request, reply) => {
   const { groupId } = request.params;
-  const { limit = '60', before, userId } = request.query || {};
+  const { userId } = request.user;
+  const { limit = '60', before } = request.query || {};
+
+  if (!(await isRoomMember(groupId, userId))) {
+    return reply.code(403).send({ error: 'Not a member of this room' });
+  }
 
   const messages = await prisma.message.findMany({
     where: {
@@ -241,7 +260,7 @@ fastify.get('/api/v1/messages/:groupId', async (request, reply) => {
       ...(before ? { createdAt: { lt: new Date(before) } } : {}),
     },
     orderBy: { createdAt: 'asc' },
-    take: parseInt(limit),
+    take: Math.min(parseInt(limit) || 60, 200),
     include: {
       sender: { select: { fullName: true, avatarUrl: true } },
       replyTo: { include: { sender: { select: { fullName: true } } } },
@@ -254,15 +273,12 @@ fastify.get('/api/v1/messages/:groupId', async (request, reply) => {
   // Approximated as the *latest* lastReadAt among everyone else in the room —
   // exact for a DM (one other member), an over-generous approximation for a
   // group (flips blue once the first other member has read that far).
-  let otherReadAt = null;
-  if (userId) {
-    const others = await prisma.groupMember.findMany({
-      where: { groupId, userId: { not: userId } },
-      select: { lastReadAt: true },
-    });
-    const timestamps = others.map(o => o.lastReadAt).filter(Boolean).map(d => d.getTime());
-    if (timestamps.length > 0) otherReadAt = new Date(Math.max(...timestamps)).toISOString();
-  }
+  const others = await prisma.groupMember.findMany({
+    where: { groupId, userId: { not: userId } },
+    select: { lastReadAt: true },
+  });
+  const timestamps = others.map(o => o.lastReadAt).filter(Boolean).map(d => d.getTime());
+  const otherReadAt = timestamps.length > 0 ? new Date(Math.max(...timestamps)).toISOString() : null;
 
   return {
     messages: messages.map(m => ({
@@ -295,15 +311,43 @@ const start = async () => {
       pingTimeout: 8000,
     });
 
+    // Every socket must present a valid JWT before it's allowed to connect at
+    // all — the client sends it as `auth: { token }` (works identically over
+    // websocket and polling, unlike an HTTP header which browsers can drop on
+    // the websocket upgrade). Identity derived here is what every handler
+    // below trusts; nothing from the client payload overrides it.
+    io.use((socket, next) => {
+      try {
+        const raw = socket.handshake.auth?.token || socket.handshake.headers?.authorization;
+        const token = typeof raw === 'string' && raw.startsWith('Bearer ') ? raw.slice(7) : raw;
+        if (!token) return next(new Error('unauthorized'));
+        const payload = fastify.jwt.verify(token);
+        if (!payload.tenantId) return next(new Error('unauthorized'));
+        socket.data.userId = payload.userId;
+        socket.data.tenantId = payload.tenantId;
+        next();
+      } catch (err) {
+        next(new Error('unauthorized'));
+      }
+    });
+
     await producer.connect();
 
     io.on('connection', (socket) => {
-      fastify.log.info(`User connected: ${socket.id}`);
+      fastify.log.info(`User ${socket.data.userId} connected: ${socket.id}`);
 
-      // Join a room (e.g., a specific group/channel)
-      socket.on('join_room', (roomId) => {
+      // Join a room — only if the verified user is actually a member of it.
+      // Without this check any authenticated socket could join any room by
+      // guessing its UUID and read every message broadcast to it.
+      socket.on('join_room', async (roomId) => {
+        if (typeof roomId !== 'string') return;
+        if (!(await isRoomMember(roomId, socket.data.userId))) {
+          socket.emit('join_room_denied', { roomId });
+          fastify.log.warn(`User ${socket.data.userId} denied join to room ${roomId}`);
+          return;
+        }
         socket.join(roomId);
-        fastify.log.info(`User ${socket.id} joined room: ${roomId}`);
+        fastify.log.info(`User ${socket.data.userId} joined room: ${roomId}`);
 
         // broadcastDelivered() only checks room membership at the instant a
         // message is sent — if the recipient's socket wasn't joined yet
@@ -321,47 +365,39 @@ const start = async () => {
       // A client emits this the moment its chat screen for roomId is open
       // and showing messages. Relayed to everyone else in the room (not
       // back to the reader) so the sender's ticks flip to blue live —
-      // socket.to() excludes the emitting socket, unlike io.to().
-      socket.on('room_read', ({ roomId, userId }) => {
-        if (!roomId || !userId) return;
-        socket.to(roomId).emit('peer_read', { roomId, userId });
+      // socket.to() excludes the emitting socket, unlike io.to(). userId is
+      // always the verified identity, never whatever the client sent.
+      socket.on('room_read', ({ roomId } = {}) => {
+        if (!roomId || !socket.rooms.has(roomId)) return;
+        socket.to(roomId).emit('peer_read', { roomId, userId: socket.data.userId });
       });
 
-      // Handle New Message
-      socket.on('send_message', async (data) => {
-        const { roomId, content, senderId, senderName = 'Unknown', replyToId } = data;
-        let { tenantId } = data;
+      // Handle New Message (socket path — not currently used by the shipped
+      // client, which sends via HTTP, but held to the same identity/
+      // membership rules as the HTTP route for when it is).
+      socket.on('send_message', async ({ roomId, content, replyToId } = {}) => {
+        if (!roomId || !content) return;
+        if (!(await isRoomMember(roomId, socket.data.userId))) return;
 
-        const messageId = require('crypto').randomUUID();
+        const senderId = socket.data.userId;
+        const tenantId = socket.data.tenantId;
+        const messageId = crypto.randomUUID();
         const now = new Date();
 
-        // Resolve tenantId from the group if the client didn't send it (or sent null)
-        if (!tenantId) {
-          try {
-            const group = await prisma.group.findUnique({ where: { id: roomId }, select: { tenantId: true } });
-            tenantId = group?.tenantId;
-          } catch (_) {}
-        }
-
         const resolvedReplyToId = await resolveReplyToId(replyToId, roomId);
+        const sender = await prisma.user.findUnique({ where: { id: senderId }, select: { fullName: true } });
 
         const messagePayload = {
           id: messageId,
           roomId,
           content,
           senderId,
-          senderName,
+          senderName: sender?.fullName ?? 'Unknown',
           tenantId,
           replyToId: resolvedReplyToId,
           timestamp: now.toISOString(),
-          createdAt: now,
         };
 
-        // 1. Broadcast to the room immediately (real-time)
-        io.to(roomId).emit('new_message', messagePayload);
-        broadcastDelivered(roomId, messageId);
-
-        // 2. Persist directly to DB so history is available instantly
         try {
           await prisma.message.create({
             data: {
@@ -376,9 +412,12 @@ const start = async () => {
           });
         } catch (err) {
           fastify.log.error(`Failed to persist message: ${err.message}`);
+          return;
         }
 
-        // 3. Publish to Kafka for downstream services (notifications, analytics)
+        io.to(roomId).emit('new_message', messagePayload);
+        broadcastDelivered(roomId, messageId);
+
         try {
           await producer.send({
             topic: 'message_sent',
@@ -388,11 +427,11 @@ const start = async () => {
           fastify.log.warn(`Kafka publish failed (non-fatal): ${err.message}`);
         }
 
-        fastify.log.info(`Message saved in room ${roomId} by ${senderName}`);
+        fastify.log.info(`Message saved in room ${roomId} by ${senderId}`);
       });
 
       socket.on('disconnect', () => {
-        fastify.log.info(`User disconnected: ${socket.id}`);
+        fastify.log.info(`User ${socket.data.userId} disconnected: ${socket.id}`);
       });
     });
 

@@ -83,6 +83,7 @@ services:
       DATABASE_URL: postgresql://unichat_admin:unichat_password@postgres:5432/unichat_db
       REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: redpanda:9092
+      JWT_SECRET: super_secret_unichat_key
     depends_on:
       - postgres
       - redis
@@ -96,6 +97,7 @@ services:
       PORT: 3004
       DATABASE_URL: postgresql://unichat_admin:unichat_password@postgres:5432/unichat_db
       REDIS_URL: redis://redis:6379
+      JWT_SECRET: super_secret_unichat_key
     depends_on:
       - postgres
       - redis
@@ -118,6 +120,7 @@ services:
     environment:
       PORT: 3005
       REDIS_URL: redis://redis:6379
+      JWT_SECRET: super_secret_unichat_key
     depends_on:
       - redis
 
@@ -127,6 +130,7 @@ services:
     container_name: unichat-media-service
     environment:
       PORT: 3006
+      JWT_SECRET: super_secret_unichat_key
     volumes:
       - ./services/media-service/uploads:/app/uploads
 

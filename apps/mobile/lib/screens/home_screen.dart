@@ -95,6 +95,11 @@ class _HomeScreenState extends State<HomeScreen> {
         'transports': ['websocket', 'polling'], 'autoConnect': true,
         'reconnection': true, 'reconnectionAttempts': 1000000,
         'reconnectionDelay': 1000, 'reconnectionDelayMax': 5000,
+        // 'auth' (not just extraHeaders) because browsers strip custom
+        // headers off the actual websocket upgrade — auth.token is part of
+        // the socket.io handshake payload itself, so it survives on every
+        // transport. The server now rejects any socket without it.
+        'auth': {'token': widget.token},
         'extraHeaders': {'Authorization': 'Bearer ${widget.token}'},
       });
       // Re-join on every connect, not just the first — a reconnect starts a

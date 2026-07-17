@@ -1,11 +1,30 @@
 const fastify = require('fastify')({ logger: true });
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { pipeline } = require('stream/promises');
 
-fastify.register(require('@fastify/multipart'), {
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB global cap
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET is not set. Refusing to start with an insecure default.');
+  process.exit(1);
+}
+
+fastify.register(require('@fastify/jwt'), { secret: process.env.JWT_SECRET });
+fastify.register(require('@fastify/rate-limit'), {
+  max: 60,
+  timeWindow: '1 minute',
 });
+fastify.register(require('@fastify/multipart'), {
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB cap, matches messaging-service's own media path
+});
+
+const bearerAuth = async (request, reply) => {
+  try {
+    await request.jwtVerify();
+  } catch {
+    return reply.code(401).send({ error: 'Invalid or expired token' });
+  }
+};
 
 const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -16,17 +35,37 @@ fastify.register(require('@fastify/static'), {
   prefix: '/api/v1/media/uploads/',
 });
 
-// General upload
-fastify.post('/api/v1/media/upload', async (req, reply) => {
-  const data = await req.file();
-  const filename = `${Date.now()}-${data.filename}`;
+// Anonymous, type-unrestricted upload used to let anyone anonymously host
+// arbitrary files on this server. Now: authenticated, and restricted to the
+// media types the app actually needs (chat attachments, avatars).
+const GENERAL_ALLOWED = [
+  'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+  'video/mp4', 'video/webm', 'video/quicktime',
+];
+
+fastify.post('/api/v1/media/upload', { preHandler: bearerAuth }, async (req, reply) => {
+  let data;
+  try {
+    data = await req.file();
+  } catch (err) {
+    return reply.code(400).send({ error: 'Invalid multipart request' });
+  }
+  if (!data) return reply.code(400).send({ error: 'No file uploaded' });
+
+  if (!GENERAL_ALLOWED.includes(data.mimetype)) {
+    data.file.resume();
+    return reply.code(400).send({ error: 'Unsupported file type' });
+  }
+
+  const ext = path.extname(data.filename || '').toLowerCase() || '.bin';
+  const filename = `${crypto.randomUUID()}${ext}`;
   const filePath = path.join(uploadsDir, filename);
   await pipeline(data.file, fs.createWriteStream(filePath));
   return { url: `http://localhost/api/v1/media/uploads/${filename}`, type: data.mimetype, name: data.filename };
 });
 
 // Logo upload — images only, 2MB enforced after read
-fastify.post('/api/v1/media/upload/logo', async (req, reply) => {
+fastify.post('/api/v1/media/upload/logo', { preHandler: bearerAuth }, async (req, reply) => {
   const ALLOWED = ['image/png', 'image/jpeg', 'image/webp'];
   const MAX_BYTES = 2 * 1024 * 1024;
 

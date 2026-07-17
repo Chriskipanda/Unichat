@@ -72,6 +72,7 @@ services:
   gateway:
     image: nginx:alpine
     container_name: unichat-gateway
+    restart: unless-stopped
     ports:
       - "80:80"
     volumes:
@@ -92,11 +93,12 @@ services:
     build:
       context: ./services/auth-service
     container_name: unichat-auth-service
+    restart: unless-stopped
     environment:
       PORT: 3001
       DATABASE_URL: postgresql://unichat_admin:unichat_password@postgres:5432/unichat_db
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:-super_secret_unichat_key}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env — no insecure default is provided}
       KAFKA_BROKERS: redpanda:9092
       # SEWMR SMS — set these in a .env beside this file (never committed). When
       # unset, OTPs fall back to the auth-service log.
@@ -115,6 +117,7 @@ services:
     build:
       context: ./services/messaging-service
     container_name: unichat-messaging-service
+    restart: unless-stopped
     volumes:
       - ./services/messaging-service/uploads:/app/uploads
     environment:
@@ -122,6 +125,7 @@ services:
       DATABASE_URL: postgresql://unichat_admin:unichat_password@postgres:5432/unichat_db
       REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: redpanda:9092
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env — no insecure default is provided}
     depends_on:
       postgres:
         condition: service_healthy
@@ -136,10 +140,12 @@ services:
     build:
       context: ./services/tenant-service
     container_name: unichat-tenant-service
+    restart: unless-stopped
     environment:
       PORT: 3004
       DATABASE_URL: postgresql://unichat_admin:unichat_password@postgres:5432/unichat_db
       REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env — no insecure default is provided}
     depends_on:
       postgres:
         condition: service_healthy
@@ -152,10 +158,11 @@ services:
     build:
       context: ./services/user-service
     container_name: unichat-user-service
+    restart: unless-stopped
     environment:
       PORT: 3003
       DATABASE_URL: postgresql://unichat_admin:unichat_password@postgres:5432/unichat_db
-      JWT_SECRET: ${JWT_SECRET:-super_secret_unichat_key}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env — no insecure default is provided}
     depends_on:
       postgres:
         condition: service_healthy
@@ -166,9 +173,11 @@ services:
     build:
       context: ./services/presence-service
     container_name: unichat-presence-service
+    restart: unless-stopped
     environment:
       PORT: 3005
       REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env — no insecure default is provided}
     depends_on:
       redis:
         condition: service_started
@@ -177,8 +186,10 @@ services:
     build:
       context: ./services/media-service
     container_name: unichat-media-service
+    restart: unless-stopped
     environment:
       PORT: 3006
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env — no insecure default is provided}
     volumes:
       - ./services/media-service/uploads:/app/uploads
 
@@ -190,6 +201,7 @@ services:
     build:
       context: ./apps/web-admin
     container_name: unichat-web-admin
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
