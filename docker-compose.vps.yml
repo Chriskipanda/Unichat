@@ -76,6 +76,10 @@ services:
       - "80:80"
     volumes:
       - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Flutter web build output — `flutter build web` produces this on your
+      # PC; it isn't built on the VPS, just served from here. Missing/empty
+      # until you copy a build in (see TEST-ACCOUNTS.txt / deploy notes).
+      - ./apps/mobile/build/web:/usr/share/nginx/html:ro
     depends_on:
       - auth-service
       - messaging-service
