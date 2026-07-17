@@ -742,6 +742,7 @@ async function demoteIfOrphanedCr(studentId, tenantId) {
 const ASSIGNMENT_INCLUDE = {
   course: { select: { id: true, name: true, department: { select: { id: true, name: true } } } },
   cr: { select: { id: true, fullName: true, studentId: true, phone: true } },
+  group: { select: { id: true, name: true, _count: { select: { members: true } } } },
 };
 
 fastify.get('/api/v1/teacher/me', { preHandler: teacherOnly }, async (request, reply) => {
@@ -774,22 +775,47 @@ fastify.get('/api/v1/teacher/courses', { preHandler: teacherOnly }, async (reque
   return { courses };
 });
 
+// Registering an assignment also creates its class chat room in the same
+// step — the room is what actually shows up in the mobile Academic tab, and
+// what /student/academic/available matches students against by course+level.
 fastify.post('/api/v1/teacher/assignments', { preHandler: teacherOnly }, async (request, reply) => {
   const { userId, tenantId } = request.user;
-  const { courseId, ntaLevel } = request.body || {};
-  if (!courseId || !ntaLevel) return reply.code(400).send({ error: 'courseId and ntaLevel are required' });
+  const { courseId, ntaLevel, moduleName } = request.body || {};
+  if (!courseId || !ntaLevel || !moduleName || !moduleName.trim()) {
+    return reply.code(400).send({ error: 'courseId, ntaLevel and moduleName are required' });
+  }
 
   const course = await prisma.course.findFirst({ where: { id: courseId, tenantId } });
   if (!course) return reply.code(404).send({ error: 'Course not found' });
 
+  const trimmedLevel = ntaLevel.trim();
+  const trimmedModule = moduleName.trim();
+
   try {
-    const assignment = await prisma.teacherAssignment.create({
-      data: { tenantId, teacherId: userId, courseId, ntaLevel: ntaLevel.trim() },
-      include: ASSIGNMENT_INCLUDE,
+    const assignment = await prisma.$transaction(async (tx) => {
+      const group = await tx.group.create({
+        data: {
+          tenantId,
+          name: trimmedModule,
+          description: `${course.name} — ${trimmedLevel}`,
+          type: 'course',
+          courseId,
+          ntaLevel: trimmedLevel,
+          createdBy: userId,
+          members: { create: { userId, role: 'owner' } },
+        },
+      });
+      return tx.teacherAssignment.create({
+        data: {
+          tenantId, teacherId: userId, courseId, ntaLevel: trimmedLevel,
+          moduleName: trimmedModule, groupId: group.id,
+        },
+        include: ASSIGNMENT_INCLUDE,
+      });
     });
     return reply.code(201).send({ assignment });
   } catch (err) {
-    if (err.code === 'P2002') return reply.code(409).send({ error: 'You already teach this course at this NTA level' });
+    if (err.code === 'P2002') return reply.code(409).send({ error: 'You already teach this module for this course and NTA level' });
     fastify.log.error(err);
     return reply.code(500).send({ error: 'Internal server error' });
   }
@@ -809,15 +835,33 @@ fastify.delete('/api/v1/teacher/assignments/:id', { preHandler: teacherOnly }, a
 });
 
 // Class Rep candidates — students (or existing CRs, so a teacher can see who
-// currently holds it) in the same institution.
+// currently holds it) in the same institution. Passing assignmentId scopes
+// this to students whose own course+NTA level match that specific class,
+// instead of showing every student in the tenant.
 fastify.get('/api/v1/teacher/students', { preHandler: teacherOnly }, async (request, reply) => {
   const { tenantId } = request.user;
-  const { search = '', limit = '20' } = request.query || {};
+  const { search = '', limit = '20', assignmentId } = request.query || {};
+
+  let scopeWhere = {};
+  if (assignmentId) {
+    const assignment = await prisma.teacherAssignment.findFirst({
+      where: { id: assignmentId, tenantId },
+      include: { course: { select: { name: true } } },
+    });
+    if (assignment) {
+      scopeWhere = {
+        course: { equals: assignment.course.name, mode: 'insensitive' },
+        ntaLevel: { equals: assignment.ntaLevel, mode: 'insensitive' },
+      };
+    }
+  }
+
   const students = await prisma.user.findMany({
     where: {
       tenantId,
       role: { in: ['student', 'class_rep'] },
       isActive: true,
+      ...scopeWhere,
       ...(search
         ? {
             OR: [
@@ -1038,6 +1082,72 @@ fastify.patch('/api/v1/student/rooms/:roomId/read', { preHandler: bearerAuth }, 
     fastify.log.error(e);
     return reply.code(500).send({ error: e.message });
   }
+});
+
+// Academic rooms matching the logged-in student's own course + NTA level
+// that they aren't a member of yet — "your class" discovery, distinct from
+// Clubs (which stay unfiltered/tenant-wide everywhere else). Matching is by
+// text equality against the room's tagged course name + NTA level, since a
+// student's `course`/`ntaLevel` fields are free text set on their profile.
+fastify.get('/api/v1/student/academic/available', { preHandler: bearerAuth }, async (request) => {
+  const { userId, tenantId } = request.user;
+
+  const me = await prisma.user.findUnique({ where: { id: userId }, select: { course: true, ntaLevel: true } });
+  if (!me?.course || !me?.ntaLevel) return { rooms: [] };
+
+  const rooms = await prisma.group.findMany({
+    where: {
+      tenantId,
+      type: 'course',
+      courseId: { not: null },
+      course: { name: { equals: me.course, mode: 'insensitive' } },
+      ntaLevel: { equals: me.ntaLevel, mode: 'insensitive' },
+      members: { none: { userId } },
+    },
+    include: {
+      course: { select: { name: true, department: { select: { name: true } } } },
+      _count: { select: { members: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return {
+    rooms: rooms.map((r) => ({
+      id: r.id,
+      name: r.name,
+      courseName: r.course?.name ?? null,
+      departmentName: r.course?.department?.name ?? null,
+      ntaLevel: r.ntaLevel,
+      memberCount: r._count.members,
+    })),
+  };
+});
+
+// Self-service join for an academic room — restricted to rooms matching the
+// student's own course+NTA level so this can't be used to join an unrelated
+// class's room.
+fastify.post('/api/v1/student/rooms/:roomId/join', { preHandler: bearerAuth }, async (request, reply) => {
+  const { userId, tenantId } = request.user;
+  const { roomId } = request.params;
+
+  const me = await prisma.user.findUnique({ where: { id: userId }, select: { course: true, ntaLevel: true } });
+  const room = await prisma.group.findFirst({
+    where: { id: roomId, tenantId, type: 'course', courseId: { not: null } },
+    include: { course: { select: { name: true } } },
+  });
+  if (!room) return reply.code(404).send({ error: 'Room not found' });
+
+  const matches = me?.course && me?.ntaLevel &&
+    room.course?.name?.toLowerCase() === me.course.toLowerCase() &&
+    room.ntaLevel?.toLowerCase() === me.ntaLevel.toLowerCase();
+  if (!matches) return reply.code(403).send({ error: "This room isn't for your course/NTA level" });
+
+  await prisma.groupMember.upsert({
+    where: { groupId_userId: { groupId: roomId, userId } },
+    update: {},
+    create: { groupId: roomId, userId, role: 'member' },
+  });
+  return { ok: true };
 });
 
 // Clubs — all clubs in the tenant + whether the user has joined

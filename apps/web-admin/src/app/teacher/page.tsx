@@ -24,11 +24,19 @@ interface Cr {
   phone?: string;
 }
 
+interface Room {
+  id: string;
+  name: string;
+  _count: { members: number };
+}
+
 interface Assignment {
   id: string;
   ntaLevel: string;
+  moduleName: string;
   course: Course;
   cr: Cr | null;
+  group: Room | null;
 }
 
 interface Student {
@@ -58,6 +66,7 @@ function AddAssignmentModal({ onClose, onCreated }: { onClose: () => void; onCre
   const [courseId, setCourseId] = useState("");
   const [ntaLevel, setNtaLevel] = useState("");
   const [ntaLevelOther, setNtaLevelOther] = useState(false);
+  const [moduleName, setModuleName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -85,7 +94,7 @@ function AddAssignmentModal({ onClose, onCreated }: { onClose: () => void; onCre
     const res = await fetch("/api/teacher/assignments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ courseId, ntaLevel }),
+      body: JSON.stringify({ courseId, ntaLevel, moduleName }),
     });
     const data = await res.json();
     setSaving(false);
@@ -149,6 +158,20 @@ function AddAssignmentModal({ onClose, onCreated }: { onClose: () => void; onCre
                 />
               )}
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Module / Subject</label>
+              <input
+                type="text"
+                value={moduleName}
+                onChange={(e) => setModuleName(e.target.value)}
+                placeholder="e.g. Database Systems"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                required
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                The specific subject you teach within this programme + level. Creates that class's chat room.
+              </p>
+            </div>
             {error && <p className="text-red-600 text-sm">{error}</p>}
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={onClose} className="flex-1 border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
@@ -183,13 +206,14 @@ function AssignCrModal({
   useEffect(() => {
     setLoading(true);
     const t = setTimeout(() => {
-      fetch(`/api/teacher/students?search=${encodeURIComponent(search)}`)
+      const params = new URLSearchParams({ search, assignmentId: assignment.id });
+      fetch(`/api/teacher/students?${params}`)
         .then((r) => r.json())
         .then((d) => setStudents(d.students ?? []))
         .finally(() => setLoading(false));
     }, 250);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [search, assignment.id]);
 
   async function assign(studentUserId: string) {
     setAssigning(studentUserId);
@@ -207,7 +231,8 @@ function AssignCrModal({
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 max-h-[80vh] flex flex-col">
         <h3 className="text-lg font-bold text-gray-900 mb-1">Assign Class Representative</h3>
-        <p className="text-sm text-gray-500 mb-4">{assignment.course.name} · {assignment.ntaLevel}</p>
+        <p className="text-sm text-gray-500 mb-4">{assignment.moduleName} · {assignment.course.name} · {assignment.ntaLevel}</p>
+        <p className="text-xs text-gray-400 -mt-3 mb-4">Showing students whose course + NTA level match this class.</p>
         <input
           type="search"
           value={search}
@@ -323,7 +348,7 @@ export default function TeacherPortalPage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Courses I Teach</h2>
-            <p className="text-sm text-gray-500">Register a course + NTA level, and assign a Class Rep for each.</p>
+            <p className="text-sm text-gray-500">Register a module you teach + its programme and NTA level — this creates that class's chat room, and you can assign a Class Rep for it.</p>
           </div>
           <button
             onClick={() => setShowAdd(true)}
@@ -346,8 +371,16 @@ export default function TeacherPortalPage() {
               <div key={a.id} className="border border-emerald-100 rounded-xl p-4">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="font-semibold text-gray-900">{a.course.name}</p>
-                    <p className="text-xs text-gray-500">{a.course.department.name} · {a.ntaLevel}</p>
+                    <p className="font-semibold text-gray-900">{a.moduleName}</p>
+                    <p className="text-xs text-gray-500">{a.course.name} · {a.course.department.name} · {a.ntaLevel}</p>
+                    {a.group && (
+                      <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        Class room · {a.group._count.members} member{a.group._count.members === 1 ? "" : "s"}
+                      </p>
+                    )}
                   </div>
                   <button
                     onClick={() => removeAssignment(a.id)}

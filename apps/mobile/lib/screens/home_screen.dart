@@ -37,6 +37,12 @@ class _HomeScreenState extends State<HomeScreen> {
   List<AcademicGroup> _groups = [];
   List<ClubModel> _clubs = [];
 
+  // Academic class rooms matching this student's own course + NTA level that
+  // they haven't joined yet — self-service discovery, unlike Clubs which are
+  // shown unfiltered tenant-wide. Empty for anyone without both fields set.
+  List<Map<String, dynamic>> _suggestedAcademic = [];
+  final Set<String> _joiningAcademic = {};
+
   Map<String, DateTime> _lastRead = {};
   String _activeFilter = 'all';
 
@@ -51,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadLastRead().then((_) { if (mounted) _loadRooms(); });
     _loadClubs();
+    _loadSuggestedAcademic();
     _connectSocket();
   }
 
@@ -263,6 +270,41 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (_) {
       if (mounted) setState(() { _loadingClubs = false; _clubsError = 'Network error.'; });
+    }
+  }
+
+  Future<void> _loadSuggestedAcademic() async {
+    try {
+      final res = await http.get(
+        Uri.parse('http://${Config.baseUrl}/api/v1/student/academic/available'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      ).timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        setState(() {
+          _suggestedAcademic = (data['rooms'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+        });
+      }
+    } catch (_) {} // best-effort — an empty suggestions list just hides the section
+  }
+
+  Future<void> _joinSuggestedAcademic(Map<String, dynamic> room) async {
+    final id = room['id'] as String;
+    setState(() => _joiningAcademic.add(id));
+    try {
+      final res = await http.post(
+        Uri.parse('http://${Config.baseUrl}/api/v1/student/rooms/$id/join'),
+        headers: {'Authorization': 'Bearer ${widget.token}'},
+      ).timeout(const Duration(seconds: 10));
+      if (!mounted) return;
+      if (res.statusCode == 200) {
+        setState(() => _suggestedAcademic.removeWhere((r) => r['id'] == id));
+        _loadRooms();
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _joiningAcademic.remove(id));
     }
   }
 
@@ -2127,23 +2169,23 @@ class _HomeScreenState extends State<HomeScreen> {
           color: Theme.of(context).colorScheme.primary, strokeWidth: 2.5));
     }
     final academic = _groups.where((g) => g.type == 'Cohort' || g.type == 'Course').toList();
-    if (_roomsError.isNotEmpty && academic.isEmpty) {
+    if (_roomsError.isNotEmpty && academic.isEmpty && _suggestedAcademic.isEmpty) {
       return _errorState(context, _roomsError, _loadRooms);
     }
-    if (academic.isEmpty) {
+    if (academic.isEmpty && _suggestedAcademic.isEmpty) {
       return _emptyState(context, 'No academic groups yet', Icons.school_outlined);
     }
     const typeOrder = ['Cohort', 'Course'];
     final sectionLabels = {'Cohort': 'My Cohorts', 'Course': 'My Courses'};
     return RefreshIndicator(
       color: AppColors.brand,
-      onRefresh: _loadRooms,
+      onRefresh: () async {
+        await Future.wait([_loadRooms(), _loadSuggestedAcademic()]);
+      },
       child: ListView(
         padding: EdgeInsets.only(top: 8, bottom: MediaQuery.of(context).padding.bottom + 80),
-        children: typeOrder.expand((type) {
-          final items = academic.where((g) => g.type == type).toList();
-          if (items.isEmpty) return <Widget>[];
-          return <Widget>[
+        children: [
+          if (_suggestedAcademic.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Row(
@@ -2151,14 +2193,93 @@ class _HomeScreenState extends State<HomeScreen> {
                   Container(width: 3, height: 16,
                       decoration: BoxDecoration(gradient: AppColors.brandGradient, borderRadius: BorderRadius.circular(2))),
                   const SizedBox(width: 10),
-                  Text(sectionLabels[type] ?? type,
+                  Text('Suggested for You',
                     style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: context.cl.textSec, letterSpacing: 0.5)),
                 ],
               ),
             ),
-            ...items.map((g) => _buildGroupTile(context, g)),
-          ];
-        }).toList(),
+            ..._suggestedAcademic.map((r) => _buildSuggestedAcademicTile(context, r)),
+          ],
+          ...typeOrder.expand((type) {
+            final items = academic.where((g) => g.type == type).toList();
+            if (items.isEmpty) return <Widget>[];
+            return <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  children: [
+                    Container(width: 3, height: 16,
+                        decoration: BoxDecoration(gradient: AppColors.brandGradient, borderRadius: BorderRadius.circular(2))),
+                    const SizedBox(width: 10),
+                    Text(sectionLabels[type] ?? type,
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: context.cl.textSec, letterSpacing: 0.5)),
+                  ],
+                ),
+              ),
+              ...items.map((g) => _buildGroupTile(context, g)),
+            ];
+          }),
+        ],
+      ),
+    );
+  }
+
+  // A matching class room the student hasn't joined yet — course + NTA level
+  // came from the teacher's own assignment, so this is exactly "your class".
+  Widget _buildSuggestedAcademicTile(BuildContext context, Map<String, dynamic> room) {
+    final id = room['id'] as String;
+    final joining = _joiningAcademic.contains(id);
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: context.cl.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.brand.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46, height: 46,
+            decoration: BoxDecoration(
+              color: AppColors.brand.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.menu_book_rounded, color: AppColors.brand, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(room['name'] as String? ?? '',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: context.cl.text)),
+                const SizedBox(height: 2),
+                Text(
+                  '${room['courseName'] ?? ''} · ${room['ntaLevel'] ?? ''}',
+                  style: TextStyle(fontSize: 11.5, color: context.cl.textHint),
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              onTap: joining ? null : () => _joinSuggestedAcademic(room),
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(color: AppColors.brand, borderRadius: BorderRadius.circular(20)),
+                child: joining
+                    ? const SizedBox(width: 14, height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.bgMain))
+                    : const Text('Join', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.bgMain)),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

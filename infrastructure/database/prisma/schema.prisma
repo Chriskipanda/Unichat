@@ -119,13 +119,20 @@ model Group {
   description       String?
   type              String   @default("private")
   academicContextId String?  @db.Uuid
+  // Tags a room as "the class chat for this course, at this NTA level" — set
+  // when the room was auto-created from a TeacherAssignment. Null for DMs,
+  // ad-hoc groups, and clubs, which aren't tied to a specific class.
+  courseId          String?  @db.Uuid
+  ntaLevel          String?
   createdBy         String?  @db.Uuid
   createdAt         DateTime @default(now())
 
-  tenant   Tenant        @relation(fields: [tenantId], references: [id])
-  creator  User?         @relation("GroupCreator", fields: [createdBy], references: [id])
-  members  GroupMember[]
-  messages Message[]
+  tenant     Tenant             @relation(fields: [tenantId], references: [id])
+  creator    User?              @relation("GroupCreator", fields: [createdBy], references: [id])
+  course     Course?            @relation(fields: [courseId], references: [id])
+  members    GroupMember[]
+  messages   Message[]
+  assignment TeacherAssignment?
 
   @@map("groups")
 }
@@ -193,28 +200,33 @@ model Course {
   tenant      Tenant              @relation(fields: [tenantId], references: [id])
   department  Department          @relation(fields: [departmentId], references: [id])
   assignments TeacherAssignment[]
+  rooms       Group[]
 
   @@map("courses")
 }
 
-// One row per (teacher, course, NTA level) they're assigned to teach. crUserId
-// is the student promoted to Class Rep for that specific course+level — role
-// promotion/demotion on the User itself is handled in application code, this
-// row is the source of truth for which assignment granted it.
+// One row per (teacher, course, NTA level, module) they're assigned to teach.
+// crUserId is the student promoted to Class Rep for it — role promotion/
+// demotion on the User itself is handled in application code, this row is
+// the source of truth for which assignment granted it. groupId is the class
+// chat room auto-created alongside the assignment (one room per module).
 model TeacherAssignment {
-  id        String   @id @default(uuid()) @db.Uuid
-  tenantId  String   @db.Uuid
-  teacherId String   @db.Uuid
-  courseId  String   @db.Uuid
-  ntaLevel  String
-  crUserId  String?  @db.Uuid
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  teacherId  String   @db.Uuid
+  courseId   String   @db.Uuid
+  ntaLevel   String
+  moduleName String
+  crUserId   String?  @db.Uuid
+  groupId    String?  @db.Uuid @unique
+  createdAt  DateTime @default(now())
 
   tenant  Tenant @relation(fields: [tenantId], references: [id])
   teacher User   @relation("TeacherAssignments", fields: [teacherId], references: [id])
   course  Course @relation(fields: [courseId], references: [id])
   cr      User?  @relation("ClassReps", fields: [crUserId], references: [id])
+  group   Group? @relation(fields: [groupId], references: [id])
 
-  @@unique([teacherId, courseId, ntaLevel])
+  @@unique([teacherId, courseId, ntaLevel, moduleName])
   @@map("teacher_assignments")
 }

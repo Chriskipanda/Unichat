@@ -19,9 +19,11 @@ interface Cr {
 interface Assignment {
   id: string;
   ntaLevel: string;
+  moduleName: string;
   teacher: Teacher;
   course: { id: string; name: string; department: { id: string; name: string } };
   cr: Cr | null;
+  group: { id: string; name: string; _count: { members: number } } | null;
 }
 
 export default function AssignmentsPage() {
@@ -56,6 +58,7 @@ export default function AssignmentsPage() {
     const q = search.toLowerCase();
     return (
       a.teacher.fullName.toLowerCase().includes(q) ||
+      a.moduleName.toLowerCase().includes(q) ||
       a.course.name.toLowerCase().includes(q) ||
       a.course.department.name.toLowerCase().includes(q) ||
       a.ntaLevel.toLowerCase().includes(q) ||
@@ -96,7 +99,8 @@ export default function AssignmentsPage() {
             <thead className="bg-indigo-50 border-b border-indigo-100">
               <tr>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Teacher</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Programme</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Module</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide hidden lg:table-cell">Programme</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide hidden md:table-cell">NTA Level</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Class Rep</th>
                 <th className="px-4 py-3" />
@@ -110,9 +114,14 @@ export default function AssignmentsPage() {
                     <p className="text-xs text-gray-400">{a.teacher.email || a.teacher.phone || "—"}</p>
                   </td>
                   <td className="px-4 py-3">
+                    <p className="text-gray-900 font-medium">{a.moduleName}</p>
+                    <p className="text-xs text-gray-400 lg:hidden">{a.course.name}</p>
+                    {a.group && <p className="text-xs text-emerald-600 mt-0.5">{a.group._count.members} in room</p>}
+                    <p className="text-xs text-gray-500 md:hidden mt-0.5">{a.ntaLevel}</p>
+                  </td>
+                  <td className="px-4 py-3 hidden lg:table-cell">
                     <p className="text-gray-900">{a.course.name}</p>
                     <p className="text-xs text-gray-400">{a.course.department.name}</p>
-                    <p className="text-xs text-gray-500 md:hidden mt-0.5">{a.ntaLevel}</p>
                   </td>
                   <td className="px-4 py-3 text-gray-700 hidden md:table-cell">{a.ntaLevel}</td>
                   <td className="px-4 py-3">
