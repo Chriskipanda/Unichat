@@ -133,10 +133,11 @@ model Group {
 }
 
 model GroupMember {
-  groupId  String   @db.Uuid
-  userId   String   @db.Uuid
-  role     String   @default("member")
-  joinedAt DateTime @default(now())
+  groupId    String    @db.Uuid
+  userId     String    @db.Uuid
+  role       String    @default("member")
+  joinedAt   DateTime  @default(now())
+  lastReadAt DateTime?
 
   group Group @relation(fields: [groupId], references: [id])
   user  User  @relation(fields: [userId], references: [id])
