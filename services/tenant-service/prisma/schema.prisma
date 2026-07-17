@@ -17,6 +17,9 @@ model Tenant {
   slug      String   @unique
   domain    String?  @unique
   logoUrl   String?
+  plan      String   @default("starter")
+  status    String   @default("active")
+  maxUsers  Int      @default(500)
   branding  Json     @default("{}")
   settings  Json     @default("{}")
   createdAt DateTime @default(now())
@@ -36,7 +39,7 @@ model Tenant {
 
 model User {
   id           String    @id @default(uuid()) @db.Uuid
-  tenantId     String    @db.Uuid
+  tenantId     String?   @db.Uuid
   email        String?
   phone        String?
   studentId    String?
@@ -52,10 +55,11 @@ model User {
   createdAt    DateTime  @default(now())
   lastLogin    DateTime?
 
-  tenant            Tenant              @relation(fields: [tenantId], references: [id])
+  tenant            Tenant?             @relation(fields: [tenantId], references: [id])
   department        Department?         @relation(fields: [departmentId], references: [id])
   groups            GroupMember[]
   messages          Message[]
+  messageReceipts   MessageReceipt[]
   sessions          Session[]
   createdGroups     Group[]             @relation("GroupCreator")
   taughtAssignments TeacherAssignment[] @relation("TeacherAssignments")
@@ -116,6 +120,9 @@ model Group {
   description       String?
   type              String   @default("private")
   academicContextId String?  @db.Uuid
+  // Tags a room as "the class chat for this course, at this NTA level" — set
+  // when the room was auto-created from a TeacherAssignment. Null for DMs,
+  // ad-hoc groups, and clubs, which aren't tied to a specific class.
   courseId          String?  @db.Uuid
   ntaLevel          String?
   avatarUrl         String?
@@ -133,10 +140,11 @@ model Group {
 }
 
 model GroupMember {
-  groupId  String   @db.Uuid
-  userId   String   @db.Uuid
-  role     String   @default("member")
-  joinedAt DateTime @default(now())
+  groupId    String    @db.Uuid
+  userId     String    @db.Uuid
+  role       String    @default("member")
+  joinedAt   DateTime  @default(now())
+  lastReadAt DateTime?
 
   group Group @relation(fields: [groupId], references: [id])
   user  User  @relation(fields: [userId], references: [id])
@@ -154,15 +162,46 @@ model Message {
   type      String   @default("text")
   metadata  Json     @default("{}")
   isEdited  Boolean  @default(false)
+  replyToId String?  @db.Uuid
   createdAt DateTime @default(now())
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  group  Group  @relation(fields: [groupId], references: [id])
-  sender User   @relation(fields: [senderId], references: [id])
+  tenant   Tenant           @relation(fields: [tenantId], references: [id])
+  group    Group            @relation(fields: [groupId], references: [id])
+  sender   User             @relation(fields: [senderId], references: [id])
+  replyTo  Message?         @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies  Message[]        @relation("MessageReplies")
+  receipts MessageReceipt[]
 
   @@index([groupId])
+  // The hot path for chat history is "this room's messages, in order" — the
+  // single-column groupId index above forces an in-memory sort on createdAt
+  // for every fetch. This compound index lets Postgres satisfy the whole
+  // query (filter + order) directly from the index.
+  @@index([groupId, createdAt])
   @@index([tenantId, createdAt(sort: Desc)])
   @@map("messages")
+}
+
+// Per-recipient, per-message delivery/read state — the persisted source of
+// truth that was missing entirely before. Previously "delivered" was only
+// ever a live Socket.IO signal (never survived a reload) and "read" was
+// approximated on reload from a single room-level GroupMember.lastReadAt
+// timestamp, which can't distinguish messages sent before vs. after that
+// timestamp landed and has no per-message precision at all. One row per
+// (message, recipient) — created lazily by the service layer, not eagerly
+// for every member on send, to avoid a write storm on large groups.
+model MessageReceipt {
+  messageId   String    @db.Uuid
+  userId      String    @db.Uuid
+  deliveredAt DateTime?
+  readAt      DateTime?
+
+  message Message @relation(fields: [messageId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@id([messageId, userId])
+  @@index([userId])
+  @@map("message_receipts")
 }
 
 model Session {
