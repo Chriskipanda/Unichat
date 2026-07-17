@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../config.dart';
 import '../services/chat_cache.dart';
 import '../widgets/chat_wallpaper.dart';
@@ -39,17 +40,76 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, DateTime> _lastRead = {};
   String _activeFilter = 'all';
 
+  // Live updates: one socket joins every room the user is in, so the chat
+  // list and unread badges move the moment a message lands — no polling,
+  // no need to open the chat first. Mirrors chat_screen.dart's per-room socket.
+  io.Socket? _socket;
+  final Set<String> _joinedRooms = {};
+
   @override
   void initState() {
     super.initState();
     _loadLastRead().then((_) { if (mounted) _loadRooms(); });
     _loadClubs();
+    _connectSocket();
   }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _socket?.disconnect();
     super.dispose();
+  }
+
+  // ── Live chat-list socket ────────────────────────────────────
+
+  void _connectSocket() {
+    try {
+      _socket = io.io('http://${Config.baseUrl}', <String, dynamic>{
+        'transports': ['websocket'], 'autoConnect': true,
+        'extraHeaders': {'Authorization': 'Bearer ${widget.token}'},
+      });
+      // Re-join on every connect, not just the first — a reconnect starts a
+      // new socket id with no room membership.
+      _socket!.onConnect((_) { _joinedRooms.clear(); _joinAllRooms(); });
+      _socket!.on('new_message', _onSocketMessage);
+    } catch (_) {}
+  }
+
+  void _joinAllRooms() {
+    for (final chat in _chats) {
+      if (_joinedRooms.add(chat.id)) {
+        _socket?.emit('join_room', chat.id);
+      }
+    }
+  }
+
+  void _onSocketMessage(dynamic data) {
+    if (!mounted) return;
+    final raw = Map<String, dynamic>.from(data as Map);
+    final roomId = raw['roomId']?.toString();
+    if (roomId == null) return;
+    final idx = _chats.indexWhere((c) => c.id == roomId);
+    if (idx < 0) return; // room not in our list yet — next _loadRooms() will pick it up
+
+    final senderId = raw['senderId']?.toString();
+    final isMine = senderId != null && senderId == widget.user.id;
+    final old = _chats[idx];
+    final updated = ChatPreview(
+      id: old.id, name: old.name, subtitle: old.subtitle,
+      lastMessage: raw['content'] as String? ?? '',
+      lastMessageType: raw['type'] as String? ?? 'text',
+      lastSender: raw['senderName'] as String? ?? '',
+      lastSenderId: senderId,
+      avatarUrl: old.avatarUrl,
+      lastMessageTime: DateTime.tryParse(raw['timestamp']?.toString() ?? '') ?? DateTime.now(),
+      isGroup: old.isGroup, isOnline: old.isOnline,
+      unreadCount: isMine ? old.unreadCount : old.unreadCount + 1,
+    );
+    setState(() {
+      _chats.removeAt(idx);
+      _chats.insert(0, updated); // WhatsApp-style: most recent activity floats to top
+    });
   }
 
   // ── Data fetching ─────────────────────────────────────────────
@@ -164,6 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
             }).toList();
 
     setState(() { _chats = chats; _groups = groups; });
+    _joinAllRooms();
   }
 
   Future<void> _loadClubs() async {
@@ -478,48 +539,82 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 8),
                   Expanded(
                     child: tabIndex == 0
-                        ? (filteredGroups.isEmpty
-                            ? Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.chat_bubble_outline_rounded, size: 48, color: context.cl.divider),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      _chats.isEmpty
-                                          ? 'No groups yet.\nAsk your institution admin to\nadd you to a group.'
-                                          : 'No results for "${searchCtrl.text}"',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: context.cl.textSec, fontSize: 14, height: 1.5),
+                        ? Column(
+                            children: [
+                              // WhatsApp-style: creating a new group lives at the top of
+                              // the same sheet used to open an existing one.
+                              if (_canCreateGroup) ...[
+                                Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () { Navigator.pop(ctx); _showCreateGroupSheet(); },
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 44, height: 44,
+                                            decoration: const BoxDecoration(
+                                              gradient: AppColors.brandGradient, shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(Icons.group_add_rounded, color: AppColors.bgMain, size: 22),
+                                          ),
+                                          const SizedBox(width: 14),
+                                          Text('New Group',
+                                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.brand)),
+                                        ],
+                                      ),
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              )
-                            : ListView.separated(
-                                controller: scrollCtrl,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                itemCount: filteredGroups.length,
-                                separatorBuilder: (_, __) => Divider(
-                                  height: 1, indent: 70,
-                                  color: context.cl.divider.withValues(alpha: 0.5),
-                                ),
-                                itemBuilder: (_, i) {
-                                  final chat = filteredGroups[i];
-                                  return ListTile(
-                                    leading: CircleAvatar(
-                                      backgroundColor: chat.avatarColor,
-                                      child: Text(chat.initials,
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
-                                    ),
-                                    title: Text(chat.name,
-                                      style: TextStyle(fontWeight: FontWeight.w600, color: context.cl.text)),
-                                    subtitle: Text(chat.subtitle,
-                                      style: TextStyle(fontSize: 12, color: context.cl.textHint)),
-                                    trailing: Icon(Icons.arrow_forward_ios_rounded, size: 14, color: context.cl.textHint),
-                                    onTap: () { Navigator.pop(ctx); _openChat(chat); },
-                                  );
-                                },
-                              ))
+                                Divider(height: 1, indent: 70, color: context.cl.divider.withValues(alpha: 0.5)),
+                              ],
+                              Expanded(
+                                child: filteredGroups.isEmpty
+                                    ? Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.chat_bubble_outline_rounded, size: 48, color: context.cl.divider),
+                                            const SizedBox(height: 12),
+                                            Text(
+                                              _chats.isEmpty
+                                                  ? 'No groups yet.\nAsk your institution admin to\nadd you to a group.'
+                                                  : 'No results for "${searchCtrl.text}"',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(color: context.cl.textSec, fontSize: 14, height: 1.5),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : ListView.separated(
+                                        controller: scrollCtrl,
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                        itemCount: filteredGroups.length,
+                                        separatorBuilder: (_, __) => Divider(
+                                          height: 1, indent: 70,
+                                          color: context.cl.divider.withValues(alpha: 0.5),
+                                        ),
+                                        itemBuilder: (_, i) {
+                                          final chat = filteredGroups[i];
+                                          return ListTile(
+                                            leading: CircleAvatar(
+                                              backgroundColor: chat.avatarColor,
+                                              child: Text(chat.initials,
+                                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+                                            ),
+                                            title: Text(chat.name,
+                                              style: TextStyle(fontWeight: FontWeight.w600, color: context.cl.text)),
+                                            subtitle: Text(chat.subtitle,
+                                              style: TextStyle(fontSize: 12, color: context.cl.textHint)),
+                                            trailing: Icon(Icons.arrow_forward_ios_rounded, size: 14, color: context.cl.textHint),
+                                            onTap: () { Navigator.pop(ctx); _openChat(chat); },
+                                          );
+                                        },
+                                      ),
+                              ),
+                            ],
+                          )
                         : loadingPeople
                             ? Center(child: CircularProgressIndicator(color: AppColors.brand, strokeWidth: 2))
                             : peopleError.isNotEmpty
@@ -1375,11 +1470,10 @@ class _HomeScreenState extends State<HomeScreen> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          _buildChatsTab(context),    // 0 – Chats
-          _buildGroupsTab(context),   // 1 – Groups
-          _buildAcademicTab(context), // 2 – Academic
-          _buildClubsTab(context),    // 3 – Clubs
-          ProfileScreen(user: widget.user, token: widget.token), // 4 – Profile
+          _buildChatsTab(context),    // 0 – Chats (DMs + groups + cohorts/courses + club rooms, unified)
+          _buildAcademicTab(context), // 1 – Academic
+          _buildClubsTab(context),    // 2 – Clubs
+          ProfileScreen(user: widget.user, token: widget.token), // 3 – Profile
         ],
       ),
       bottomNavigationBar: _buildBottomNav(context),
@@ -2018,55 +2112,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── Groups Tab (all non-private rooms) ───────────────────────
-  Widget _buildGroupsTab(BuildContext context) {
-    if (_loadingRooms) {
-      return Center(child: CircularProgressIndicator(
-          color: Theme.of(context).colorScheme.primary, strokeWidth: 2.5));
-    }
-    if (_roomsError.isNotEmpty && _groups.isEmpty) {
-      return _errorState(context, _roomsError, _loadRooms);
-    }
-    if (_groups.isEmpty) {
-      return _emptyState(context, 'No groups yet', Icons.forum_outlined);
-    }
-
-    // Order: Groups first, then Cohorts, then Courses, then Club
-    const typeOrder = ['Group', 'Cohort', 'Course', 'Club'];
-    final sectionLabels = {
-      'Group': 'My Groups',
-      'Cohort': 'My Cohorts',
-      'Course': 'My Courses',
-      'Club': 'My Club Rooms',
-    };
-    return RefreshIndicator(
-      color: AppColors.brand,
-      onRefresh: _loadRooms,
-      child: ListView(
-        padding: EdgeInsets.only(top: 8, bottom: MediaQuery.of(context).padding.bottom + 80),
-        children: typeOrder.expand((type) {
-          final items = _groups.where((g) => g.type == type).toList();
-          if (items.isEmpty) return <Widget>[];
-          return <Widget>[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Row(
-                children: [
-                  Container(width: 3, height: 16,
-                      decoration: BoxDecoration(gradient: AppColors.brandGradient, borderRadius: BorderRadius.circular(2))),
-                  const SizedBox(width: 10),
-                  Text(sectionLabels[type] ?? type,
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: context.cl.textSec, letterSpacing: 0.5)),
-                ],
-              ),
-            ),
-            ...items.map((g) => _buildGroupTile(context, g)),
-          ];
-        }).toList(),
-      ),
-    );
-  }
-
   // ── Academic Tab (cohorts + courses only) ─────────────────────
   Widget _buildAcademicTab(BuildContext context) {
     if (_loadingRooms) {
@@ -2180,17 +2225,15 @@ class _HomeScreenState extends State<HomeScreen> {
       color: AppColors.brand,
       onRefresh: _loadClubs,
       child: ListView(
-        padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 80),
+        padding: EdgeInsets.only(top: 4, bottom: MediaQuery.of(context).padding.bottom + 80),
         children: [
           if (joined.isNotEmpty) ...[
             _clubSectionHeader(context, 'My Clubs'),
-            const SizedBox(height: 8),
             ...joined.map((c) => _buildClubCard(context, c)),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
           ],
           if (discover.isNotEmpty) ...[
             _clubSectionHeader(context, 'Discover Clubs'),
-            const SizedBox(height: 8),
             ...discover.map((c) => _buildClubCard(context, c)),
           ],
         ],
@@ -2199,101 +2242,79 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _clubSectionHeader(BuildContext context, String title) {
-    return Row(
-      children: [
-        Container(width: 3, height: 16,
-            decoration: BoxDecoration(gradient: AppColors.brandGradient, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(width: 10),
-        Text(title, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: context.cl.textSec, letterSpacing: 0.5)),
-      ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+      child: Text(title,
+        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.brand, letterSpacing: 0.3)),
     );
   }
 
+  // Flat list row (no card border), WhatsApp-list style.
   Widget _buildClubCard(BuildContext context, ClubModel club) {
     final index = _clubs.indexOf(club);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: context.cl.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: club.isJoined ? club.color.withValues(alpha: 0.4) : context.cl.divider),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          splashColor: club.color.withValues(alpha: 0.08),
-          onTap: () {},
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                Container(
-                  width: 50, height: 50,
-                  decoration: BoxDecoration(
-                    color: club.color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(club.icon, color: club.color, size: 26),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {},
+        splashColor: club.color.withValues(alpha: 0.08),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 50, height: 50,
+                decoration: BoxDecoration(
+                  color: club.color.withValues(alpha: 0.15), shape: BoxShape.circle,
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(club.name,
-                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: context.cl.text)),
-                      const SizedBox(height: 3),
-                      Text(club.activity,
-                          style: TextStyle(fontSize: 12, color: club.color, fontWeight: FontWeight.w500),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.people_rounded, size: 12, color: context.cl.textHint),
-                          const SizedBox(width: 4),
-                          Text('${club.memberCount} members', style: TextStyle(fontSize: 12, color: context.cl.textHint)),
-                          const SizedBox(width: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: context.cl.cardLight, borderRadius: BorderRadius.circular(6)),
-                            child: Text(club.category, style: TextStyle(fontSize: 10, color: context.cl.textSec)),
-                          ),
-                        ],
+                child: Icon(club.icon, color: club.color, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(club.name,
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5, color: context.cl.text)),
+                    const SizedBox(height: 3),
+                    Text(club.activity,
+                        style: TextStyle(fontSize: 12.5, color: context.cl.textSec),
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 4),
+                    Text('${club.memberCount} members · ${club.category}',
+                        style: TextStyle(fontSize: 11.5, color: context.cl.textHint)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Semantics(
+                label: club.isJoined ? 'Leave ${club.name}' : 'Join ${club.name}',
+                button: true,
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    onTap: () => _toggleClubMembership(club, index),
+                    borderRadius: BorderRadius.circular(20),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: club.isJoined ? Colors.transparent : AppColors.brand,
+                        borderRadius: BorderRadius.circular(20),
+                        border: club.isJoined ? Border.all(color: context.cl.divider) : null,
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Semantics(
-                  label: club.isJoined ? 'Leave ${club.name}' : 'Join ${club.name}',
-                  button: true,
-                  child: Material(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    child: InkWell(
-                      onTap: () => _toggleClubMembership(club, index),
-                      borderRadius: BorderRadius.circular(8),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: club.isJoined ? club.color.withValues(alpha: 0.15) : club.color,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          club.isJoined ? 'Joined' : 'Join',
-                          style: TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w700,
-                            color: club.isJoined ? club.color : Colors.white,
-                          ),
+                      child: Text(
+                        club.isJoined ? 'Joined' : 'Join',
+                        style: TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w700,
+                          color: club.isJoined ? context.cl.textSec : AppColors.bgMain,
                         ),
                       ),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -2312,17 +2333,7 @@ class _HomeScreenState extends State<HomeScreen> {
           tooltip: 'New Chat',
           child: const Icon(Icons.chat_rounded),
         );
-      case 1: // Groups — show create if eligible
-        if (!_canCreateGroup) return null;
-        return FloatingActionButton.extended(
-          onPressed: _showCreateGroupSheet,
-          backgroundColor: AppColors.brand,
-          foregroundColor: AppColors.bgMain,
-          elevation: 4,
-          icon: const Icon(Icons.group_add_rounded),
-          label: const Text('New Group', style: TextStyle(fontWeight: FontWeight.w700)),
-        );
-      case 2: // Academic — create cohort/course (teachers/admin only)
+      case 1: // Academic — create cohort/course (teachers/admin only)
         if (!_canCreateClub) return null;
         return FloatingActionButton.extended(
           onPressed: _showCreateAcademicSheet,
@@ -2332,7 +2343,7 @@ class _HomeScreenState extends State<HomeScreen> {
           icon: const Icon(Icons.school_rounded),
           label: const Text('New Academic', style: TextStyle(fontWeight: FontWeight.w700)),
         );
-      case 3: // Clubs — show create if teacher/admin
+      case 2: // Clubs — show create if teacher/admin
         if (!_canCreateClub) return null;
         return FloatingActionButton.extended(
           onPressed: _showCreateClubSheet,
@@ -2353,11 +2364,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Nav item data: (label, outlineIcon, filledIcon, badge)
     final items = <(String, IconData, IconData, int)>[
-      ('Chats',    Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded,  totalUnread),
-      ('Groups',   Icons.forum_outlined,              Icons.forum_rounded,        0),
-      ('Academic', Icons.school_outlined,             Icons.school_rounded,       0),
-      ('Clubs',    Icons.groups_outlined,             Icons.groups_rounded,       0),
-      ('Profile',  Icons.person_outline_rounded,      Icons.person_rounded,       0),
+      ('Chats',    Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, totalUnread),
+      ('Academic', Icons.school_outlined,             Icons.school_rounded,      0),
+      ('Clubs',    Icons.groups_outlined,             Icons.groups_rounded,      0),
+      ('Profile',  Icons.person_outline_rounded,      Icons.person_rounded,      0),
     ];
 
     return Container(

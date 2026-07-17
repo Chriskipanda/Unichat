@@ -361,8 +361,9 @@ fastify.get('/api/v1/institution/users', { preHandler: institutionAdminOnly }, a
       take: parseInt(limit),
       skip: (parseInt(page) - 1) * parseInt(limit),
       select: {
-        id: true, fullName: true, email: true, studentId: true,
-        staffId: true, role: true, isActive: true, createdAt: true, lastLogin: true,
+        id: true, fullName: true, email: true, phone: true, studentId: true,
+        staffId: true, role: true, course: true, ntaLevel: true,
+        isActive: true, createdAt: true, lastLogin: true,
       },
     }),
     prisma.user.count({ where }),
@@ -372,13 +373,21 @@ fastify.get('/api/v1/institution/users', { preHandler: institutionAdminOnly }, a
 
 fastify.post('/api/v1/institution/users', { preHandler: institutionAdminOnly }, async (request, reply) => {
   const { tenantId } = request.user;
-  const { fullName, email, studentId, staffId, role } = request.body || {};
+  const { fullName, email, phone, studentId, staffId, role, course, ntaLevel } = request.body || {};
   if (!fullName) return reply.code(400).send({ error: 'Full name is required' });
 
   try {
     const user = await prisma.user.create({
-      data: { tenantId, fullName, email: email || null, studentId: studentId || null, staffId: staffId || null, role: role || 'student', isActive: true },
-      select: { id: true, fullName: true, email: true, studentId: true, staffId: true, role: true, isActive: true, createdAt: true },
+      data: {
+        tenantId, fullName, email: email || null, phone: phone || null,
+        studentId: studentId || null, staffId: staffId || null, role: role || 'student',
+        course: course || null, ntaLevel: ntaLevel || null, isActive: true,
+      },
+      select: {
+        id: true, fullName: true, email: true, phone: true, studentId: true,
+        staffId: true, role: true, course: true, ntaLevel: true,
+        isActive: true, createdAt: true,
+      },
     });
     return reply.code(201).send({ user });
   } catch (err) {
@@ -391,7 +400,7 @@ fastify.post('/api/v1/institution/users', { preHandler: institutionAdminOnly }, 
 fastify.patch('/api/v1/institution/users/:id', { preHandler: institutionAdminOnly }, async (request, reply) => {
   const { id } = request.params;
   const { tenantId } = request.user;
-  const { isActive, role, fullName } = request.body || {};
+  const { isActive, role, fullName, phone, course, ntaLevel } = request.body || {};
 
   if (role === 'superadmin' || role === 'admin') return reply.code(400).send({ error: 'Cannot set this role' });
 
@@ -399,12 +408,18 @@ fastify.patch('/api/v1/institution/users/:id', { preHandler: institutionAdminOnl
   if (isActive !== undefined) data.isActive = isActive;
   if (role) data.role = role;
   if (fullName) data.fullName = fullName;
+  if (phone !== undefined) data.phone = phone || null;
+  if (course !== undefined) data.course = course || null;
+  if (ntaLevel !== undefined) data.ntaLevel = ntaLevel || null;
 
   const result = await prisma.user.updateMany({ where: { id, tenantId }, data });
   if (result.count === 0) return reply.code(404).send({ error: 'User not found' });
   const user = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, fullName: true, email: true, studentId: true, staffId: true, role: true, isActive: true },
+    select: {
+      id: true, fullName: true, email: true, phone: true, studentId: true,
+      staffId: true, role: true, course: true, ntaLevel: true, isActive: true,
+    },
   });
   return { user };
 });

@@ -45,6 +45,8 @@ model User {
   fullName     String
   passwordHash String?
   role         String    @default("student")
+  course       String?
+  ntaLevel     String?
   avatarUrl    String?
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
