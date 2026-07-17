@@ -13,6 +13,24 @@ interface Faculty {
   departments: Department[];
 }
 
+interface Course {
+  id: string;
+  name: string;
+  department: { id: string; name: string };
+}
+
+// Standard NACTE/VETA-style NTA bands — mirrors the teacher portal's list so
+// a programme + level picked here matches what students/teachers see there.
+const DIPLOMA_LEVELS = ["NTA Level 4", "NTA Level 5", "NTA Level 6"];
+const BACHELOR_LEVELS = ["NTA Level 7-1", "NTA Level 7-2", "NTA Level 8"];
+
+function levelsForProgramme(name: string): string[] {
+  const n = name.toLowerCase();
+  if (n.includes("bachelor")) return BACHELOR_LEVELS;
+  if (n.includes("diploma")) return DIPLOMA_LEVELS;
+  return [...DIPLOMA_LEVELS, ...BACHELOR_LEVELS];
+}
+
 interface User {
   id: string;
   fullName: string;
@@ -159,11 +177,12 @@ function AddModal({ departments, onClose, onCreated }: AddModalProps) {
 interface EditModalProps {
   user: User;
   departments: Department[];
+  courses: Course[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-function EditModal({ user, departments, onClose, onSaved }: EditModalProps) {
+function EditModal({ user, departments, courses, onClose, onSaved }: EditModalProps) {
   const isTeacher = user.role === "teacher" || user.role === "staff";
   const [form, setForm] = useState({
     fullName: user.fullName,
@@ -177,6 +196,7 @@ function EditModal({ user, departments, onClose, onSaved }: EditModalProps) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const availableLevels = form.course ? levelsForProgramme(form.course) : [];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -249,25 +269,38 @@ function EditModal({ user, departments, onClose, onSaved }: EditModalProps) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {isTeacher ? "Course Taught" : "Programme / Course"}
+              {isTeacher ? "Programme Taught" : "Programme / Course"}
             </label>
-            <input
-              type="text"
+            <select
               value={form.course}
-              onChange={(e) => setForm((f) => ({ ...f, course: e.target.value }))}
-              placeholder="e.g. Bachelor Degree in Computer Science"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+              onChange={(e) => setForm((f) => ({ ...f, course: e.target.value, ntaLevel: "" }))}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            >
+              <option value="">No programme</option>
+              {form.course && !courses.some((c) => c.name === form.course) && (
+                <option value={form.course}>{form.course} (custom)</option>
+              )}
+              {courses.map((c) => (
+                <option key={c.id} value={c.name}>{c.name} — {c.department.name}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">NTA Level</label>
-            <input
-              type="text"
+            <select
               value={form.ntaLevel}
               onChange={(e) => setForm((f) => ({ ...f, ntaLevel: e.target.value }))}
-              placeholder="e.g. NTA Level 7-2"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+              disabled={!form.course}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+            >
+              <option value="">{form.course ? "No level" : "Pick a programme first"}</option>
+              {form.ntaLevel && !availableLevels.includes(form.ntaLevel) && (
+                <option value={form.ntaLevel}>{form.ntaLevel} (custom)</option>
+              )}
+              {availableLevels.map((lvl) => (
+                <option key={lvl} value={lvl}>{lvl}</option>
+              ))}
+            </select>
           </div>
           {isTeacher && (
             <div>
@@ -308,6 +341,7 @@ const ROLE_BADGE: Record<string, string> = {
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<RoleTab>("all");
   const [search, setSearch] = useState("");
@@ -316,14 +350,17 @@ export default function UsersPage() {
 
   async function load() {
     setLoading(true);
-    const [usersRes, deptRes] = await Promise.all([
+    const [usersRes, deptRes, coursesRes] = await Promise.all([
       fetch("/api/institution/users"),
       fetch("/api/institution/departments"),
+      fetch("/api/institution/courses"),
     ]);
     const usersData = await usersRes.json();
     const deptData = await deptRes.json();
+    const coursesData = await coursesRes.json();
     setUsers(usersData.users ?? []);
     setDepartments(((deptData.faculties ?? []) as Faculty[]).flatMap((f) => f.departments));
+    setCourses(coursesData.courses ?? []);
     setLoading(false);
   }
 
@@ -343,6 +380,26 @@ export default function UsersPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ departmentId: departmentId || null }),
+    });
+    load();
+  }
+
+  async function assignProgramme(user: User, course: string) {
+    // Changing programme invalidates whatever NTA level was picked for the
+    // old one (a Diploma level doesn't apply to a Bachelor programme).
+    await fetch(`/api/institution/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ course: course || null, ntaLevel: null }),
+    });
+    load();
+  }
+
+  async function assignNtaLevel(user: User, ntaLevel: string) {
+    await fetch(`/api/institution/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ntaLevel: ntaLevel || null }),
     });
     load();
   }
@@ -425,6 +482,8 @@ export default function UsersPage() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide hidden md:table-cell">Contact / ID</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Role</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide hidden lg:table-cell">Department</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide hidden xl:table-cell">Programme</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide hidden xl:table-cell">NTA Level</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Status</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -451,6 +510,45 @@ export default function UsersPage() {
                         <option value="">Unassigned</option>
                         {departments.map((d) => (
                           <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 hidden xl:table-cell">
+                    {u.role !== "admin" ? (
+                      <select
+                        value={u.course ?? ""}
+                        onChange={(e) => assignProgramme(u, e.target.value)}
+                        className="border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white max-w-[180px]"
+                      >
+                        <option value="">No programme</option>
+                        {u.course && !courses.some((c) => c.name === u.course) && (
+                          <option value={u.course}>{u.course} (custom)</option>
+                        )}
+                        {courses.map((c) => (
+                          <option key={c.id} value={c.name}>{c.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 hidden xl:table-cell">
+                    {u.role !== "admin" ? (
+                      <select
+                        value={u.ntaLevel ?? ""}
+                        onChange={(e) => assignNtaLevel(u, e.target.value)}
+                        disabled={!u.course}
+                        className="border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                      >
+                        <option value="">{u.course ? "No level" : "—"}</option>
+                        {u.ntaLevel && !levelsForProgramme(u.course ?? "").includes(u.ntaLevel) && (
+                          <option value={u.ntaLevel}>{u.ntaLevel} (custom)</option>
+                        )}
+                        {levelsForProgramme(u.course ?? "").map((lvl) => (
+                          <option key={lvl} value={lvl}>{lvl}</option>
                         ))}
                       </select>
                     ) : (
@@ -499,6 +597,7 @@ export default function UsersPage() {
         <EditModal
           user={editing}
           departments={departments}
+          courses={courses}
           onClose={() => setEditing(null)}
           onSaved={load}
         />
