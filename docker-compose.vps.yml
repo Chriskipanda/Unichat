@@ -182,6 +182,22 @@ services:
     volumes:
       - ./services/media-service/uploads:/app/uploads
 
+  # SuperAdmin / Institution Admin / Teacher web portal. Public on its own
+  # port rather than folded into the gateway, since the Flutter web build
+  # already owns "/" there — everything it calls is still auth-gated by JWT,
+  # same trust model as the API gateway.
+  web-admin:
+    build:
+      context: ./apps/web-admin
+    container_name: unichat-web-admin
+    ports:
+      - "3000:3000"
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:3001
+      NODE_ENV: production
+    depends_on:
+      - auth-service
+
   # One-shot: builds the Flutter web app using a containerized Flutter SDK —
   # nothing is installed on the VPS host itself. Not part of the normal
   # `docker compose up`; run it explicitly whenever the mobile app changes:
