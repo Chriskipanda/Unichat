@@ -40,10 +40,15 @@ interface Student {
   role: string;
 }
 
+// Standard NACTE/VETA-style NTA bands. "Other" falls back to free text so an
+// unusual level (or a future band) never blocks registering an assignment.
+const NTA_LEVELS = ["NTA Level 4", "NTA Level 5", "NTA Level 6", "NTA Level 7-1", "NTA Level 7-2", "NTA Level 8-1", "NTA Level 8-2"];
+
 function AddAssignmentModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState("");
   const [ntaLevel, setNtaLevel] = useState("");
+  const [ntaLevelOther, setNtaLevelOther] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -95,14 +100,33 @@ function AddAssignmentModal({ onClose, onCreated }: { onClose: () => void; onCre
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">NTA Level</label>
-              <input
-                type="text"
-                value={ntaLevel}
-                onChange={(e) => setNtaLevel(e.target.value)}
-                placeholder="e.g. NTA Level 7-2"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                required
-              />
+              <select
+                value={ntaLevelOther ? "__other__" : ntaLevel}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "__other__") { setNtaLevelOther(true); setNtaLevel(""); }
+                  else { setNtaLevelOther(false); setNtaLevel(v); }
+                }}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                required={!ntaLevelOther}
+              >
+                <option value="">Select NTA level…</option>
+                {NTA_LEVELS.map((lvl) => (
+                  <option key={lvl} value={lvl}>{lvl}</option>
+                ))}
+                <option value="__other__">Other…</option>
+              </select>
+              {ntaLevelOther && (
+                <input
+                  type="text"
+                  value={ntaLevel}
+                  onChange={(e) => setNtaLevel(e.target.value)}
+                  placeholder="e.g. NTA Level 9"
+                  className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  required
+                  autoFocus
+                />
+              )}
             </div>
             {error && <p className="text-red-600 text-sm">{error}</p>}
             <div className="flex gap-3 pt-2">
