@@ -76,9 +76,9 @@ services:
       - "80:80"
     volumes:
       - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      # Flutter web build output — `flutter build web` produces this on your
-      # PC; it isn't built on the VPS, just served from here. Missing/empty
-      # until you copy a build in (see TEST-ACCOUNTS.txt / deploy notes).
+      # Flutter web build output. The `web-builder` service below (run on
+      # demand, see its comment) writes straight into this same host path,
+      # so nginx picks up a new build immediately — no restart needed.
       - ./apps/mobile/build/web:/usr/share/nginx/html:ro
     depends_on:
       - auth-service
@@ -181,6 +181,24 @@ services:
       PORT: 3006
     volumes:
       - ./services/media-service/uploads:/app/uploads
+
+  # One-shot: builds the Flutter web app using a containerized Flutter SDK —
+  # nothing is installed on the VPS host itself. Not part of the normal
+  # `docker compose up`; run it explicitly whenever the mobile app changes:
+  #
+  #   docker compose -f docker-compose.vps.yml --profile build \
+  #     run --rm web-builder
+  #
+  # Writes straight into ./apps/mobile/build/web, which the gateway already
+  # serves — no restart needed afterward.
+  web-builder:
+    image: ghcr.io/cirruslabs/flutter:stable
+    container_name: unichat-web-builder
+    working_dir: /app
+    volumes:
+      - ./apps/mobile:/app
+    command: ["sh", "-c", "flutter pub get && flutter build web --release"]
+    profiles: ["build"]
 
 volumes:
   postgres_data:
