@@ -91,7 +91,8 @@ services:
 
   auth-service:
     build:
-      context: ./services/auth-service
+      context: .
+      dockerfile: services/auth-service/Dockerfile
     container_name: unichat-auth-service
     restart: unless-stopped
     environment:
@@ -115,11 +116,12 @@ services:
 
   messaging-service:
     build:
-      context: ./services/messaging-service
+      context: .
+      dockerfile: services/messaging-service/Dockerfile
     container_name: unichat-messaging-service
     restart: unless-stopped
     volumes:
-      - ./services/messaging-service/uploads:/app/uploads
+      - ./services/messaging-service/uploads:/app/services/messaging-service/uploads
     environment:
       PORT: 3002
       DATABASE_URL: postgresql://unichat_admin:unichat_password@postgres:5432/unichat_db
@@ -138,7 +140,8 @@ services:
 
   tenant-service:
     build:
-      context: ./services/tenant-service
+      context: .
+      dockerfile: services/tenant-service/Dockerfile
     container_name: unichat-tenant-service
     restart: unless-stopped
     environment:
@@ -156,7 +159,8 @@ services:
 
   user-service:
     build:
-      context: ./services/user-service
+      context: .
+      dockerfile: services/user-service/Dockerfile
     container_name: unichat-user-service
     restart: unless-stopped
     environment:
@@ -171,7 +175,8 @@ services:
 
   presence-service:
     build:
-      context: ./services/presence-service
+      context: .
+      dockerfile: services/presence-service/Dockerfile
     container_name: unichat-presence-service
     restart: unless-stopped
     environment:
@@ -184,14 +189,15 @@ services:
 
   media-service:
     build:
-      context: ./services/media-service
+      context: .
+      dockerfile: services/media-service/Dockerfile
     container_name: unichat-media-service
     restart: unless-stopped
     environment:
       PORT: 3006
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env — no insecure default is provided}
     volumes:
-      - ./services/media-service/uploads:/app/uploads
+      - ./services/media-service/uploads:/app/services/media-service/uploads
 
   # SuperAdmin / Institution Admin / Teacher web portal. Public on its own
   # port rather than folded into the gateway, since the Flutter web build

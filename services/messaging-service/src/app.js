@@ -7,20 +7,14 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-// Fail fast, not silently insecure: a missing JWT_SECRET must stop the
-// service from starting at all, never fall back to a secret that's public
-// in this repository's git history.
-if (!process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET is not set. Refusing to start with an insecure default.');
-  process.exit(1);
-}
+const { registerJwt, bearerAuthWithTenant: bearerAuth, verifyToken } = require('../../../shared/auth');
 
 // ── Upload directory ──────────────────────────────────────────────────────────
-const UPLOAD_DIR = '/app/uploads';
+const UPLOAD_DIR = path.join(__dirname, '../uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 // Register plugins
-fastify.register(require('@fastify/jwt'), { secret: process.env.JWT_SECRET });
+registerJwt(fastify, require('@fastify/jwt'));
 fastify.register(require('@fastify/rate-limit'), {
   max: 120,
   timeWindow: '1 minute',
@@ -36,14 +30,6 @@ fastify.register(require('@fastify/static'), {
 // Every route below (except /health) requires a valid JWT. Identity for a
 // send/read always comes from the verified token, never from the request
 // body or query string — the client cannot claim to be another user.
-const bearerAuth = async (request, reply) => {
-  try {
-    await request.jwtVerify();
-    if (!request.user.tenantId) return reply.code(403).send({ error: 'No tenant scope' });
-  } catch {
-    return reply.code(401).send({ error: 'Invalid or expired token' });
-  }
-};
 
 // Send/read access to a room requires actual membership — not just a guessed
 // or known UUID. Used by both the HTTP routes and the socket layer so the
@@ -319,9 +305,7 @@ const start = async () => {
     io.use((socket, next) => {
       try {
         const raw = socket.handshake.auth?.token || socket.handshake.headers?.authorization;
-        const token = typeof raw === 'string' && raw.startsWith('Bearer ') ? raw.slice(7) : raw;
-        if (!token) return next(new Error('unauthorized'));
-        const payload = fastify.jwt.verify(token);
+        const payload = verifyToken(fastify, raw);
         if (!payload.tenantId) return next(new Error('unauthorized'));
         socket.data.userId = payload.userId;
         socket.data.tenantId = payload.tenantId;

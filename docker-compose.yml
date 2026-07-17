@@ -56,10 +56,11 @@ services:
   # 5. Core Services
   auth-service:
     build:
-      context: ./services/auth-service
+      context: .
+      dockerfile: services/auth-service/Dockerfile
     container_name: unichat-auth-service
     volumes:
-      - ./services/auth-service/src:/app/src
+      - ./services/auth-service/src:/app/services/auth-service/src
     environment:
       PORT: 3001
       DATABASE_URL: postgresql://unichat_admin:unichat_password@postgres:5432/unichat_db
@@ -72,12 +73,13 @@ services:
 
   messaging-service:
     build:
-      context: ./services/messaging-service
+      context: .
+      dockerfile: services/messaging-service/Dockerfile
     container_name: unichat-messaging-service
     # Chat attachments live on disk while their URLs live in the DB — without
     # this mount a rebuild wipes every image and leaves the rows dangling.
     volumes:
-      - ./services/messaging-service/uploads:/app/uploads
+      - ./services/messaging-service/uploads:/app/services/messaging-service/uploads
     environment:
       PORT: 3002
       DATABASE_URL: postgresql://unichat_admin:unichat_password@postgres:5432/unichat_db
@@ -91,7 +93,8 @@ services:
 
   tenant-service:
     build:
-      context: ./services/tenant-service
+      context: .
+      dockerfile: services/tenant-service/Dockerfile
     container_name: unichat-tenant-service
     environment:
       PORT: 3004
@@ -104,7 +107,8 @@ services:
 
   user-service:
     build:
-      context: ./services/user-service
+      context: .
+      dockerfile: services/user-service/Dockerfile
     container_name: unichat-user-service
     environment:
       PORT: 3003
@@ -115,7 +119,8 @@ services:
 
   presence-service:
     build:
-      context: ./services/presence-service
+      context: .
+      dockerfile: services/presence-service/Dockerfile
     container_name: unichat-presence-service
     environment:
       PORT: 3005
@@ -126,13 +131,14 @@ services:
 
   media-service:
     build:
-      context: ./services/media-service
+      context: .
+      dockerfile: services/media-service/Dockerfile
     container_name: unichat-media-service
     environment:
       PORT: 3006
       JWT_SECRET: super_secret_unichat_key
     volumes:
-      - ./services/media-service/uploads:/app/uploads
+      - ./services/media-service/uploads:/app/services/media-service/uploads
 
 volumes:
   postgres_data:

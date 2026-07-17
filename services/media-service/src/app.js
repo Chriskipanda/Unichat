@@ -4,12 +4,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { pipeline } = require('stream/promises');
 
-if (!process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET is not set. Refusing to start with an insecure default.');
-  process.exit(1);
-}
-
-fastify.register(require('@fastify/jwt'), { secret: process.env.JWT_SECRET });
+const { registerJwt, bearerAuth } = require('../../../shared/auth');
+registerJwt(fastify, require('@fastify/jwt'));
 fastify.register(require('@fastify/rate-limit'), {
   max: 60,
   timeWindow: '1 minute',
@@ -17,14 +13,6 @@ fastify.register(require('@fastify/rate-limit'), {
 fastify.register(require('@fastify/multipart'), {
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB cap, matches messaging-service's own media path
 });
-
-const bearerAuth = async (request, reply) => {
-  try {
-    await request.jwtVerify();
-  } catch {
-    return reply.code(401).send({ error: 'Invalid or expired token' });
-  }
-};
 
 const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });

@@ -2,12 +2,8 @@ const fastify = require('fastify')({ logger: true });
 const { Server } = require('socket.io');
 const Redis = require('ioredis');
 
-if (!process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET is not set. Refusing to start with an insecure default.');
-  process.exit(1);
-}
-
-fastify.register(require('@fastify/jwt'), { secret: process.env.JWT_SECRET });
+const { registerJwt, verifyToken } = require('../../../shared/auth');
+registerJwt(fastify, require('@fastify/jwt'));
 
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 const PRESENCE_TTL_SECONDS = 60;
@@ -26,9 +22,7 @@ const start = async () => {
     io.use((socket, next) => {
       try {
         const raw = socket.handshake.auth?.token || socket.handshake.headers?.authorization;
-        const token = typeof raw === 'string' && raw.startsWith('Bearer ') ? raw.slice(7) : raw;
-        if (!token) return next(new Error('unauthorized'));
-        const payload = fastify.jwt.verify(token);
+        const payload = verifyToken(fastify, raw);
         socket.data.userId = payload.userId;
         socket.data.tenantId = payload.tenantId;
         next();

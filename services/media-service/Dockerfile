@@ -1,7 +1,9 @@
 FROM node:20-alpine
 WORKDIR /app
-COPY package*.json ./
+COPY shared ./shared
+WORKDIR /app/services/media-service
+COPY services/media-service/package*.json ./
 RUN npm install
-COPY . .
+COPY services/media-service/. .
 EXPOSE 3006
 CMD ["npm", "run", "dev"]

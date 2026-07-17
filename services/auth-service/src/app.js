@@ -15,16 +15,13 @@ const kafka = new Kafka({
 });
 const producer = kafka.producer();
 
-if (!process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET is not set. Refusing to start with an insecure default.');
-  process.exit(1);
-}
+const { registerJwt } = require('../../../shared/auth');
 
 // credentials:true + a reflected origin is the classic wildcard-with-cookies
 // anti-pattern — this API is bearer-token-only (no cookie auth anywhere),
 // so there's no cookie to protect and no reason to opt into it.
 fastify.register(require('@fastify/cors'), { origin: true, credentials: false });
-fastify.register(require('@fastify/jwt'), { secret: process.env.JWT_SECRET });
+registerJwt(fastify, require('@fastify/jwt'));
 fastify.register(require('@fastify/rate-limit'), {
   max: 100,
   timeWindow: '1 minute',

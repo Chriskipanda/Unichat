@@ -3,12 +3,8 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const Redis = require('ioredis');
 
-if (!process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET is not set. Refusing to start with an insecure default.');
-  process.exit(1);
-}
-
-fastify.register(require('@fastify/jwt'), { secret: process.env.JWT_SECRET });
+const { registerJwt } = require('../../../shared/auth');
+registerJwt(fastify, require('@fastify/jwt'));
 
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 

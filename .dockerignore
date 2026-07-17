@@ -1,0 +1,12 @@
+.git
+.claude
+node_modules
+**/node_modules
+apps/mobile
+apps/web-admin/node_modules
+apps/web-admin/.next
+services/*/node_modules
+services/*/uploads
+services/*/generated
+*.log
+.env

@@ -2,20 +2,8 @@ const fastify = require('fastify')({ logger: true });
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-if (!process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET is not set. Refusing to start with an insecure default.');
-  process.exit(1);
-}
-
-fastify.register(require('@fastify/jwt'), { secret: process.env.JWT_SECRET });
-
-const bearerAuth = async (request, reply) => {
-  try {
-    await request.jwtVerify();
-  } catch {
-    return reply.code(401).send({ error: 'Invalid or expired token' });
-  }
-};
+const { registerJwt, bearerAuth } = require('../../../shared/auth');
+registerJwt(fastify, require('@fastify/jwt'));
 
 fastify.get('/api/v1/users/health', async () => ({ status: 'ok', service: 'user-service' }));
 
