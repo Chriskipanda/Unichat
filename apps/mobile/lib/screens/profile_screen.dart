@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config.dart';
 import '../models/models.dart';
+import '../services/profile_service.dart';
 import '../theme/theme_controller.dart';
 import 'tenant_screen.dart';
 
@@ -503,6 +504,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _profile = {...?_profile, 'avatarUrl': avatarUrl};
           _uploadingAvatar = false;
         });
+        ProfileService.setAvatarUrl(avatarUrl);
         _showSnack('Profile photo updated!');
       } else {
         setState(() { _uploadingAvatar = false; });
@@ -629,6 +631,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _profile = {...?_profile, 'avatarUrl': null};
           _uploadingAvatar = false;
         });
+        ProfileService.setAvatarUrl(''); // empty = explicitly removed, distinct from null ("no change yet")
         _showSnack('Profile photo removed.');
       } else {
         setState(() { _uploadingAvatar = false; });

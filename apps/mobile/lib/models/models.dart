@@ -177,8 +177,11 @@ class Message {
       content: isMedia ? mediaLabelFor(type) : content,
       senderId: data['senderId']?.toString() ?? '',
       senderName: data['senderName'] ?? 'Unknown',
+      // Server sends UTC ISO timestamps; convert to local right here so every
+      // downstream formatter (and "same day" comparisons) works in the
+      // device's own timezone instead of the server's.
       timestamp: data['timestamp'] != null
-          ? DateTime.tryParse(data['timestamp'].toString()) ?? DateTime.now()
+          ? (DateTime.tryParse(data['timestamp'].toString())?.toLocal() ?? DateTime.now())
           : DateTime.now(),
       status: status,
       imageUrl: isMedia ? '$_origin$content' : (data['imageUrl'] as String?),
@@ -229,6 +232,10 @@ class ChatPreview {
   final int unreadCount;
   final bool isOnline;
   final bool isGroup;
+  // Whether the signed-in user may change this room's photo — a teacher,
+  // class rep, or group owner/admin. Server-enforced; this only drives
+  // whether the client shows the edit affordance.
+  final bool canEditAvatar;
 
   const ChatPreview({
     required this.id,
@@ -243,6 +250,7 @@ class ChatPreview {
     this.unreadCount = 0,
     this.isOnline = false,
     this.isGroup = false,
+    this.canEditAvatar = false,
   });
 
   /// What the row shows: an upload URL is meaningless to a reader, so media

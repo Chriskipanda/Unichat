@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../config.dart';
+import '../services/active_chat_tracker.dart';
 import '../services/chat_cache.dart';
+import '../services/profile_service.dart';
 import '../widgets/chat_wallpaper.dart';
 import '../models/models.dart';
 import 'chat_screen.dart';
@@ -35,6 +38,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<ChatPreview> _chats = [];
   List<AcademicGroup> _groups = [];
+  // Every room the student belongs to, including Academic ones excluded from
+  // _chats — the live-update socket still needs to join all of them so the
+  // Academic tab's "last activity" stays current.
+  List<String> _allRoomIds = [];
   List<ClubModel> _clubs = [];
 
   // Academic class rooms matching this student's own course + NTA level that
@@ -65,6 +72,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _searchCtrl.dispose();
     _socket?.disconnect();
+    _bannerTimer?.cancel();
+    _bannerEntry?.remove();
     super.dispose();
   }
 
@@ -73,7 +82,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void _connectSocket() {
     try {
       _socket = io.io('http://${Config.baseUrl}', <String, dynamic>{
-        'transports': ['websocket'], 'autoConnect': true,
+        'transports': ['websocket', 'polling'], 'autoConnect': true,
+        'reconnection': true, 'reconnectionAttempts': 1000000,
+        'reconnectionDelay': 1000, 'reconnectionDelayMax': 5000,
         'extraHeaders': {'Authorization': 'Bearer ${widget.token}'},
       });
       // Re-join on every connect, not just the first — a reconnect starts a
@@ -84,9 +95,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _joinAllRooms() {
-    for (final chat in _chats) {
-      if (_joinedRooms.add(chat.id)) {
-        _socket?.emit('join_room', chat.id);
+    for (final roomId in _allRoomIds) {
+      if (_joinedRooms.add(roomId)) {
+        _socket?.emit('join_room', roomId);
       }
     }
   }
@@ -108,14 +119,96 @@ class _HomeScreenState extends State<HomeScreen> {
       lastMessageType: raw['type'] as String? ?? 'text',
       lastSender: raw['senderName'] as String? ?? '',
       lastSenderId: senderId,
-      avatarUrl: old.avatarUrl,
-      lastMessageTime: DateTime.tryParse(raw['timestamp']?.toString() ?? '') ?? DateTime.now(),
+      // For a DM the row avatar IS the peer's photo, so the payload's sender
+      // photo can replace it live. Groups show the room's own photo instead —
+      // overwriting it with whoever just spoke would make it flicker between
+      // members' faces, so groups keep whatever _loadRooms() last fetched.
+      avatarUrl: old.isGroup ? old.avatarUrl : ((raw['senderAvatar'] as String?) ?? old.avatarUrl),
+      lastMessageTime: (DateTime.tryParse(raw['timestamp']?.toString() ?? '') ?? DateTime.now()).toLocal(),
       isGroup: old.isGroup, isOnline: old.isOnline,
       unreadCount: isMine ? old.unreadCount : old.unreadCount + 1,
+      canEditAvatar: old.canEditAvatar,
     );
     setState(() {
       _chats.removeAt(idx);
       _chats.insert(0, updated); // WhatsApp-style: most recent activity floats to top
+    });
+
+    // Only alert for someone else's message in a room that isn't the one the
+    // user is already looking at — ChatScreen has its own socket and shows the
+    // message directly, so re-alerting there would be redundant and annoying.
+    if (!isMine && roomId != ActiveChatTracker.currentRoomId) {
+      SystemSound.play(SystemSoundType.alert);
+      HapticFeedback.lightImpact();
+      _showIncomingBanner(updated);
+    }
+  }
+
+  OverlayEntry? _bannerEntry;
+  Timer? _bannerTimer;
+
+  void _showIncomingBanner(ChatPreview chat) {
+    _bannerEntry?.remove();
+    _bannerTimer?.cancel();
+    final overlay = Overlay.of(context);
+    final preview = switch (chat.lastMessageType) {
+      'image' => '📷 Photo',
+      'video' => '🎬 Video',
+      _ => chat.lastMessage,
+    };
+    _bannerEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).padding.top + 8,
+        left: 12,
+        right: 12,
+        child: SafeArea(
+          bottom: false,
+          child: Material(
+            color: Colors.transparent,
+            child: GestureDetector(
+              onTap: () {
+                _bannerEntry?.remove();
+                _bannerEntry = null;
+                _bannerTimer?.cancel();
+                _openChat(chat);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 16, offset: const Offset(0, 4)),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    _avatarCircle(radius: 20, name: chat.initials, color: chat.avatarColor, imageUrl: chat.avatarUrl, isGroup: chat.isGroup),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(chat.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                          const SizedBox(height: 2),
+                          Text(preview, maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    overlay.insert(_bannerEntry!);
+    _bannerTimer = Timer(const Duration(seconds: 4), () {
+      _bannerEntry?.remove();
+      _bannerEntry = null;
     });
   }
 
@@ -171,14 +264,22 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Turn the server's room payload into view models. Shared by the network and
   /// cache paths so cached chats render identically to live ones.
   void _applyRooms(List<Map<String, dynamic>> rooms) {
-        final chats = rooms.map((r) {
+        _allRoomIds = rooms.map((r) => r['id'] as String).toList();
+
+        // Academic rooms (cohort/course) live on the Academic tab only — mixing
+        // them into Chats was the earlier "unified list" behavior, since
+        // reversed per the user's explicit request to keep academics separate.
+        final chats = rooms.where((r) {
+          final t = r['type'] as String? ?? '';
+          return t != 'cohort' && t != 'course';
+        }).map((r) {
           final type = r['type'] as String? ?? '';
           final isGroup = type != 'private';
           final subtitle = (r['subtitle'] as String?)
               ?? (isGroup ? '${r['memberCount']} members' : '');
           final roomId = r['id'] as String;
           final lastSender = (r['lastSenderName'] as String?) ?? '';
-          final lastMsgAt = DateTime.tryParse((r['lastMessageAt'] as String?) ?? '');
+          final lastMsgAt = DateTime.tryParse((r['lastMessageAt'] as String?) ?? '')?.toLocal();
           // Prefer the server's count; fall back to a local 0/1 heuristic only
           // when it's absent (an older cached payload won't carry the field).
           final serverUnread = (r['unreadCount'] as num?)?.toInt();
@@ -205,6 +306,7 @@ class _HomeScreenState extends State<HomeScreen> {
             lastMessageTime: lastMsgAt ?? DateTime.now(),
             isGroup: isGroup,
             unreadCount: unreadCount,
+            canEditAvatar: r['canEditAvatar'] as bool? ?? false,
           );
         }).toList();
 
@@ -1498,6 +1600,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (_) => ChatScreen(
         roomId: chat.id, roomName: chat.name, subtitle: chat.subtitle,
         isGroup: chat.isGroup, isOnline: chat.isOnline,
+        avatarUrl: chat.avatarUrl, canEditAvatar: chat.canEditAvatar,
         user: widget.user, token: widget.token,
       ),
     )).then((_) => _loadRooms());
@@ -1888,29 +1991,33 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ── Shared avatar circle helper ───────────────────────────────
-  /// Shows a profile photo when available; falls back to coloured initials.
+  /// Shows a profile photo when available; falls back to coloured initials —
+  /// or, for a photo-less group room, a stacked "double profile" icon so a
+  /// multi-user room reads as a group at a glance instead of looking like a
+  /// person whose name happens to start with a random letter.
   Widget _avatarCircle({
     required double radius,
     required String name,
     required Color color,
     String? imageUrl,
+    bool isGroup = false,
   }) {
+    final hasImage = imageUrl != null && imageUrl.isNotEmpty;
     return CircleAvatar(
       radius: radius,
       backgroundColor: color,
-      foregroundImage: (imageUrl != null && imageUrl.isNotEmpty)
-          ? NetworkImage(imageUrl)
-          : null,
-      onForegroundImageError: (imageUrl != null && imageUrl.isNotEmpty)
-          ? (_, __) {} : null,
-      child: Text(
-        name.isNotEmpty ? name[0].toUpperCase() : '?',
-        style: TextStyle(
-          fontSize: radius * 0.6,
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+      foregroundImage: hasImage ? NetworkImage(imageUrl) : null,
+      onForegroundImageError: hasImage ? (_, __) {} : null,
+      child: (!hasImage && isGroup)
+          ? Icon(Icons.groups_rounded, size: radius * 1.1, color: Colors.white)
+          : Text(
+              name.isNotEmpty ? name[0].toUpperCase() : '?',
+              style: TextStyle(
+                fontSize: radius * 0.6,
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
     );
   }
 
@@ -1979,8 +2086,16 @@ class _HomeScreenState extends State<HomeScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         children: [
-          _buildStatusCircle(context, widget.user.initials, widget.user.avatarColor, 'You',
-              imageUrl: widget.user.avatarUrl, isMe: true),
+          ValueListenableBuilder<String?>(
+            valueListenable: ProfileService.avatarUrl,
+            builder: (_, override, __) {
+              // null = no change this session (fall back to login-time value);
+              // '' = explicitly removed; anything else = the new photo.
+              final effective = override == null ? widget.user.avatarUrl : (override.isEmpty ? null : override);
+              return _buildStatusCircle(context, widget.user.initials, widget.user.avatarColor, 'You',
+                  imageUrl: effective, isMe: true);
+            },
+          ),
           ...online.map((c) => _buildStatusCircle(context, c.initials, c.avatarColor,
               c.name.split(' ').first, imageUrl: c.avatarUrl)),
         ],
@@ -2089,6 +2204,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     name: chat.name,
                     color: chat.avatarColor,
                     imageUrl: chat.avatarUrl,
+                    isGroup: chat.isGroup,
                   ),
                   if (!chat.isGroup && chat.isOnline)
                     Positioned(right: 0, bottom: 0,
@@ -2460,7 +2576,7 @@ class _HomeScreenState extends State<HomeScreen> {
           foregroundColor: AppColors.bgMain,
           elevation: 4,
           tooltip: 'New Chat',
-          child: const Icon(Icons.chat_rounded),
+          child: const Icon(Icons.add_rounded),
         );
       case 1: // Academic — create cohort/course (teachers/admin only)
         if (!_canCreateAcademic) return null;

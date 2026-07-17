@@ -121,6 +121,7 @@ model Group {
   academicContextId String?  @db.Uuid
   courseId          String?  @db.Uuid
   ntaLevel          String?
+  avatarUrl         String?
   createdBy         String?  @db.Uuid
   createdAt         DateTime @default(now())
 

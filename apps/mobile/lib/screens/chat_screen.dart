@@ -9,6 +9,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../config.dart';
 import '../models/models.dart';
+import '../services/active_chat_tracker.dart';
 import '../services/chat_cache.dart';
 import '../services/outbox.dart';
 import '../widgets/attachment_sheet.dart';
@@ -20,6 +21,8 @@ class ChatScreen extends StatefulWidget {
   final String subtitle;
   final bool isGroup;
   final bool isOnline;
+  final String? avatarUrl;
+  final bool canEditAvatar;
   final UserModel user;
   final String token;
 
@@ -27,6 +30,7 @@ class ChatScreen extends StatefulWidget {
     super.key,
     required this.roomId, required this.roomName, required this.subtitle,
     required this.isGroup, required this.isOnline,
+    this.avatarUrl, this.canEditAvatar = false,
     required this.user, required this.token,
   });
 
@@ -45,6 +49,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool _showAttachPanel = false;
   String _typingUser = '';
   Message? _replyingTo;
+  String? _avatarUrl;
+  bool _uploadingAvatar = false;
   io.Socket? _socket;
   io.Socket? _presenceSocket;
   Timer? _typingClearTimer;   // receiver side: drops a stale "is typing…"
@@ -56,6 +62,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    ActiveChatTracker.currentRoomId = widget.roomId;
+    _avatarUrl = widget.avatarUrl;
     _setupTypingAnimation();
     _connectSocket();
     _loadHistory();
@@ -155,7 +163,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _connectSocket() {
     try {
       _socket = io.io('http://${Config.baseUrl}', <String, dynamic>{
-        'transports': ['websocket'], 'autoConnect': true,
+        // Polling as a fallback, not just websocket: some networks/proxies
+        // block the websocket upgrade outright, which otherwise means this
+        // socket never connects at all rather than degrading gracefully.
+        'transports': ['websocket', 'polling'], 'autoConnect': true,
+        'reconnection': true, 'reconnectionAttempts': 1000000,
+        'reconnectionDelay': 1000, 'reconnectionDelayMax': 5000,
         'extraHeaders': {'Authorization': 'Bearer ${widget.token}'},
       });
       // Re-join on every connect, not just the first — a reconnect starts a new
@@ -165,6 +178,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _socket!.onConnect((_) {
         _socket!.emit('join_room', widget.roomId);
         _flushOutbox();
+        // This screen being open and connected IS "viewing the room" — tell
+        // the server so the peer's own sent messages flip to a blue tick.
+        _socket!.emit('room_read', {'roomId': widget.roomId, 'userId': widget.user.id});
       });
       _socket!.on('new_message', (data) {
         if (!mounted) return;
@@ -175,9 +191,43 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         setState(() => _messages.add(msg));
         _scrollToBottom();
         ChatCache.appendMessage(widget.roomId, raw);
+        // The screen is open and the new message just got painted — that's a
+        // read, not just a delivery, so tell the sender right away.
+        _socket!.emit('room_read', {'roomId': widget.roomId, 'userId': widget.user.id});
+      });
+      // Upgrade our own sent message(s) from single to double grey tick once the
+      // server confirms someone else's socket is in the room.
+      _socket!.on('message_delivered', (data) {
+        if (!mounted) return;
+        final d = Map<String, dynamic>.from(data);
+        if (d['roomId'] != widget.roomId) return;
+        final messageId = d['messageId'];
+        setState(() {
+          for (final m in _messages) {
+            if (m.id == messageId && m.senderId == widget.user.id && m.status == MessageStatus.sent) {
+              m.status = MessageStatus.delivered;
+            }
+          }
+        });
+      });
+      // The peer opened/is viewing this room — every one of our own messages
+      // they could see is now truly read, so flip all of them to blue.
+      _socket!.on('peer_read', (data) {
+        if (!mounted) return;
+        final d = Map<String, dynamic>.from(data);
+        if (d['roomId'] != widget.roomId || d['userId'] == widget.user.id) return;
+        setState(() {
+          for (final m in _messages) {
+            if (m.senderId == widget.user.id && m.status != MessageStatus.read) {
+              m.status = MessageStatus.read;
+            }
+          }
+        });
       });
       _presenceSocket = io.io('http://${Config.baseUrl}', <String, dynamic>{
-        'transports': ['websocket'], 'autoConnect': true, 'path': '/presence/',
+        'transports': ['websocket', 'polling'], 'autoConnect': true, 'path': '/presence/',
+        'reconnection': true, 'reconnectionAttempts': 1000000,
+        'reconnectionDelay': 1000, 'reconnectionDelayMax': 5000,
         'query': {'userId': widget.user.id, 'tenantId': widget.user.tenant['id']},
       });
       // Presence relays typing with socket.to(roomId), so this socket must be a
@@ -280,10 +330,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         final sent = (jsonDecode(res.body)['message'] as Map?)?.cast<String, dynamic>();
         final serverId = sent?['id'] as String?;
         if (serverId != null) msg.id = serverId;
+        // Single grey tick — real delivered/read promotion comes from the
+        // server via 'message_delivered'/'peer_read' (see _connectSocket),
+        // not a guess-and-hope timer.
         setState(() => msg.status = MessageStatus.sent);
         if (sent != null) await ChatCache.appendMessage(widget.roomId, sent);
-        await Future.delayed(const Duration(seconds: 1));
-        if (mounted) setState(() => msg.status = MessageStatus.delivered);
       }
     } catch (_) {
       // No network. Persist it so it survives leaving the screen or killing the
@@ -403,10 +454,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         }
         final serverId = sent?['id'] as String?;
         if (serverId != null) msg.id = serverId;
+        // Single grey tick — real delivered/read promotion comes from the
+        // server via 'message_delivered'/'peer_read' (see _connectSocket),
+        // not a guess-and-hope timer.
         setState(() => msg.status = MessageStatus.sent);
         if (sent != null) await ChatCache.appendMessage(widget.roomId, sent);
-        await Future.delayed(const Duration(seconds: 1));
-        if (mounted) setState(() => msg.status = MessageStatus.delivered);
       }
     } catch (_) {
       // Network error — stays in sending state so user knows it failed
@@ -498,6 +550,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    // Only clear if we're still "it" — pushing straight from chat A into chat
+    // B sets B's id before A's dispose runs, and A's dispose must not clobber it.
+    if (ActiveChatTracker.currentRoomId == widget.roomId) {
+      ActiveChatTracker.currentRoomId = null;
+    }
     _msgCtrl.dispose(); _scrollCtrl.dispose(); _typingCtrl.dispose();
     _typingClearTimer?.cancel();
     // Tell the peer we stopped typing before the socket drops, otherwise their
@@ -574,6 +631,69 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildHeaderAvatar() {
+    final hasImage = _avatarUrl != null && _avatarUrl!.isNotEmpty;
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: AppColors.brand.withValues(alpha: 0.2),
+      foregroundImage: hasImage ? NetworkImage(_avatarUrl!) : null,
+      onForegroundImageError: hasImage ? (_, __) {} : null,
+      // A photo-less group shows a "double profile" icon instead of an
+      // initial — an initial reads as one person, which is misleading for a
+      // room with many members.
+      child: (!hasImage && widget.isGroup)
+          ? const Icon(Icons.groups_rounded, size: 20, color: AppColors.brand)
+          : Text(widget.roomName.isNotEmpty ? widget.roomName[0] : '?',
+              style: const TextStyle(color: AppColors.brand, fontWeight: FontWeight.w800, fontSize: 14)),
+    );
+  }
+
+  /// Only reachable when widget.canEditAvatar is true, but the server is the
+  /// real gate (teacher/class-rep/group-admin) — this is just the UI entry point.
+  Future<void> _changeRoomAvatar() async {
+    final XFile? image = await _imagePicker.pickImage(
+      source: ImageSource.gallery, maxWidth: 800, maxHeight: 800, imageQuality: 85,
+    );
+    if (image == null || !mounted) return;
+
+    setState(() => _uploadingAvatar = true);
+    try {
+      final request = http.MultipartRequest(
+        'POST', Uri.parse('http://${Config.baseUrl}/api/v1/media/upload'),
+      );
+      request.headers['Authorization'] = 'Bearer ${widget.token}';
+      request.files.add(await http.MultipartFile.fromPath('file', image.path));
+
+      final streamed = await request.send().timeout(const Duration(seconds: 30));
+      final responseBody = await streamed.stream.bytesToString();
+      if (!mounted) return;
+      if (streamed.statusCode != 200) {
+        setState(() => _uploadingAvatar = false);
+        return;
+      }
+
+      final rawUrl = (jsonDecode(responseBody) as Map<String, dynamic>)['url'] as String? ?? '';
+      final avatarUrl = rawUrl.replaceFirst('http://localhost', 'http://${Config.baseUrl}');
+
+      final patchRes = await http.patch(
+        Uri.parse('http://${Config.baseUrl}/api/v1/student/rooms/${widget.roomId}/avatar'),
+        headers: {
+          'Authorization': 'Bearer ${widget.token}',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'avatarUrl': avatarUrl}),
+      ).timeout(const Duration(seconds: 10));
+
+      if (!mounted) return;
+      setState(() {
+        _uploadingAvatar = false;
+        if (patchRes.statusCode == 200) _avatarUrl = avatarUrl;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
+  }
+
   PreferredSizeWidget _buildAppBar(BuildContext context) {
     return AppBar(
       titleSpacing: 0,
@@ -583,11 +703,19 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       ),
       title: Row(
         children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: AppColors.brand.withValues(alpha: 0.2),
-            child: Text(widget.roomName[0],
-                style: const TextStyle(color: AppColors.brand, fontWeight: FontWeight.w800, fontSize: 14)),
+          GestureDetector(
+            onTap: widget.isGroup && widget.canEditAvatar ? _changeRoomAvatar : null,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                _buildHeaderAvatar(),
+                if (_uploadingAvatar)
+                  const SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  ),
+              ],
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(

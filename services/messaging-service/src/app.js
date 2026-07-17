@@ -30,6 +30,18 @@ const producer = kafka.producer();
 // Module-level io reference — assigned inside start() after server listens
 let io = null;
 
+// "Delivered" (double grey tick) means at least one other socket is already
+// in the room when the message broadcasts — i.e. a recipient has the chat
+// open on their device. This isn't per-recipient tracking, but it matches
+// what the UI actually renders: one status per message, not one per member.
+function broadcastDelivered(roomId, messageId) {
+  if (!io) return;
+  const room = io.sockets.adapter.rooms.get(roomId);
+  if (room && room.size > 1) {
+    io.to(roomId).emit('message_delivered', { roomId, messageId });
+  }
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // A quote can name a message that never existed (client still holding a
@@ -159,6 +171,7 @@ fastify.post('/api/v1/messages/:groupId/media', async (request, reply) => {
 
   // Broadcast to all room members via socket (recipient sees it instantly)
   if (io) io.to(groupId).emit('new_message', payload);
+  broadcastDelivered(groupId, messageId);
 
   fastify.log.info(`[MEDIA] ${msgType} saved in room ${groupId} by ${senderName} — ${fields._filename}`);
   return reply.code(201).send({ message: payload });
@@ -209,6 +222,7 @@ fastify.post('/api/v1/messages/:groupId', async (request, reply) => {
 
   // Broadcast to all sockets in the room
   if (io) io.to(groupId).emit('new_message', payload);
+  broadcastDelivered(groupId, messageId);
 
   fastify.log.info(`Message saved (HTTP) in room ${groupId} by ${senderName}`);
   return reply.code(201).send({ message: payload });
@@ -269,6 +283,15 @@ const start = async () => {
         fastify.log.info(`User ${socket.id} joined room: ${roomId}`);
       });
 
+      // A client emits this the moment its chat screen for roomId is open
+      // and showing messages. Relayed to everyone else in the room (not
+      // back to the reader) so the sender's ticks flip to blue live —
+      // socket.to() excludes the emitting socket, unlike io.to().
+      socket.on('room_read', ({ roomId, userId }) => {
+        if (!roomId || !userId) return;
+        socket.to(roomId).emit('peer_read', { roomId, userId });
+      });
+
       // Handle New Message
       socket.on('send_message', async (data) => {
         const { roomId, content, senderId, senderName = 'Unknown', replyToId } = data;
@@ -301,6 +324,7 @@ const start = async () => {
 
         // 1. Broadcast to the room immediately (real-time)
         io.to(roomId).emit('new_message', messagePayload);
+        broadcastDelivered(roomId, messageId);
 
         // 2. Persist directly to DB so history is available instantly
         try {

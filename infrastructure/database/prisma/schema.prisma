@@ -124,6 +124,7 @@ model Group {
   // ad-hoc groups, and clubs, which aren't tied to a specific class.
   courseId          String?  @db.Uuid
   ntaLevel          String?
+  avatarUrl         String?
   createdBy         String?  @db.Uuid
   createdAt         DateTime @default(now())
 

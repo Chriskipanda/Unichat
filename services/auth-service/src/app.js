@@ -47,6 +47,10 @@ const institutionAdminOnly = async (request, reply) => {
 
 const TEACHER_ROLES = ['teacher', 'lecturer', 'staff'];
 
+// Who may change a group/class room's photo: institution staff globally, or
+// someone elevated within that specific room (class rep, group owner/admin).
+const ROOM_AVATAR_ELEVATED_ROLES = ['teacher', 'lecturer', 'staff', 'admin', 'class_rep'];
+
 const teacherOnly = async (request, reply) => {
   try {
     await request.jwtVerify();
@@ -982,7 +986,7 @@ const bearerAuth = async (request, reply) => {
 
 // Rooms — all groups the user belongs to, with last message preview
 fastify.get('/api/v1/student/rooms', { preHandler: bearerAuth }, async (request) => {
-  const { userId, tenantId } = request.user;
+  const { userId, tenantId, role } = request.user;
 
   const groups = await prisma.group.findMany({
     where: { tenantId, members: { some: { userId } } },
@@ -1041,10 +1045,16 @@ fastify.get('/api/v1/student/rooms', { preHandler: bearerAuth }, async (request)
             : r === 'admin' ? 'Admin' : 'Student';
         }
       }
-      // For DMs: use the other user's avatar. For groups: no room-level avatar yet.
+      // For DMs: use the other user's avatar. For groups: the room's own photo,
+      // set via PATCH .../avatar by a teacher/CR/group admin.
       const other = g.type === 'private'
         ? g.members.find(m => m.userId !== userId)
         : null;
+      const myMembership = g.members.find(m => m.userId === userId);
+      const canEditAvatar = g.type !== 'private' && (
+        ROOM_AVATAR_ELEVATED_ROLES.includes(role)
+        || myMembership?.role === 'owner' || myMembership?.role === 'admin'
+      );
 
       return {
         id: g.id,
@@ -1052,7 +1062,8 @@ fastify.get('/api/v1/student/rooms', { preHandler: bearerAuth }, async (request)
         type: g.type,
         memberCount: g._count.members,
         subtitle,
-        avatarUrl: other?.user?.avatarUrl ?? null,            // DM partner's photo
+        avatarUrl: g.type === 'private' ? (other?.user?.avatarUrl ?? null) : (g.avatarUrl ?? null),
+        canEditAvatar,
         lastMessage: g.messages[0]?.content ?? '',
         // Media stores its URL in content, so the client needs the type to show
         // a label instead of printing the raw upload path in the chat list.
@@ -1082,6 +1093,44 @@ fastify.patch('/api/v1/student/rooms/:roomId/read', { preHandler: bearerAuth }, 
     fastify.log.error(e);
     return reply.code(500).send({ error: e.message });
   }
+});
+
+// Change a group/class room's photo. Not every member should be able to do
+// this — only the teacher/institution staff (global role) or someone
+// explicitly elevated within this room (class rep, group owner/admin) can.
+// DMs have no room-level photo (they show the other person's), so this is
+// group-type rooms only.
+fastify.patch('/api/v1/student/rooms/:roomId/avatar', { preHandler: bearerAuth }, async (request, reply) => {
+  const { userId, tenantId, role } = request.user;
+  const { roomId } = request.params;
+  const { avatarUrl } = request.body || {};
+  if (typeof avatarUrl !== 'string') {
+    return reply.code(400).send({ error: 'avatarUrl is required' });
+  }
+
+  const group = await prisma.group.findFirst({ where: { id: roomId, tenantId } });
+  if (!group) return reply.code(404).send({ error: 'Room not found' });
+  if (group.type === 'private') {
+    return reply.code(400).send({ error: 'Direct messages have no room photo' });
+  }
+
+  const membership = await prisma.groupMember.findUnique({
+    where: { groupId_userId: { groupId: roomId, userId } },
+  });
+  if (!membership) return reply.code(403).send({ error: 'Not a member of this room' });
+
+  const isElevated = ROOM_AVATAR_ELEVATED_ROLES.includes(role)
+    || membership.role === 'owner' || membership.role === 'admin';
+  if (!isElevated) {
+    return reply.code(403).send({ error: 'Only the teacher, class rep, or a group admin can change this photo' });
+  }
+
+  const updated = await prisma.group.update({
+    where: { id: roomId },
+    data: { avatarUrl: avatarUrl || null },
+    select: { id: true, avatarUrl: true },
+  });
+  return { room: updated };
 });
 
 // Academic rooms matching the logged-in student's own course + NTA level
