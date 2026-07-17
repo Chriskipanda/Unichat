@@ -209,7 +209,9 @@ model TeacherAssignment {
   teacherId  String   @db.Uuid
   courseId   String   @db.Uuid
   ntaLevel   String
-  moduleName String
+  moduleName String? // required at the app layer for new rows; nullable in the
+                     // DB so this column could be added without a destructive
+                     // reset on an install that already had assignment rows
   crUserId   String?  @db.Uuid
   groupId    String?  @db.Uuid @unique
   createdAt  DateTime @default(now())

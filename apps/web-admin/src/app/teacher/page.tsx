@@ -33,7 +33,7 @@ interface Room {
 interface Assignment {
   id: string;
   ntaLevel: string;
-  moduleName: string;
+  moduleName: string | null; // null only for rows created before this field existed
   course: Course;
   cr: Cr | null;
   group: Room | null;
@@ -231,7 +231,7 @@ function AssignCrModal({
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 max-h-[80vh] flex flex-col">
         <h3 className="text-lg font-bold text-gray-900 mb-1">Assign Class Representative</h3>
-        <p className="text-sm text-gray-500 mb-4">{assignment.moduleName} · {assignment.course.name} · {assignment.ntaLevel}</p>
+        <p className="text-sm text-gray-500 mb-4">{assignment.moduleName ?? "Untitled module"} · {assignment.course.name} · {assignment.ntaLevel}</p>
         <p className="text-xs text-gray-400 -mt-3 mb-4">Showing students whose course + NTA level match this class.</p>
         <input
           type="search"
@@ -371,7 +371,7 @@ export default function TeacherPortalPage() {
               <div key={a.id} className="border border-emerald-100 rounded-xl p-4">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="font-semibold text-gray-900">{a.moduleName}</p>
+                    <p className="font-semibold text-gray-900">{a.moduleName ?? <span className="italic text-gray-400">Untitled module — remove and re-add to name it</span>}</p>
                     <p className="text-xs text-gray-500">{a.course.name} · {a.course.department.name} · {a.ntaLevel}</p>
                     {a.group && (
                       <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">

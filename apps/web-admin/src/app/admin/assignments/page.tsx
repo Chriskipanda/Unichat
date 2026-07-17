@@ -19,7 +19,7 @@ interface Cr {
 interface Assignment {
   id: string;
   ntaLevel: string;
-  moduleName: string;
+  moduleName: string | null; // null only for rows created before this field existed
   teacher: Teacher;
   course: { id: string; name: string; department: { id: string; name: string } };
   cr: Cr | null;
@@ -58,7 +58,7 @@ export default function AssignmentsPage() {
     const q = search.toLowerCase();
     return (
       a.teacher.fullName.toLowerCase().includes(q) ||
-      a.moduleName.toLowerCase().includes(q) ||
+      a.moduleName?.toLowerCase().includes(q) ||
       a.course.name.toLowerCase().includes(q) ||
       a.course.department.name.toLowerCase().includes(q) ||
       a.ntaLevel.toLowerCase().includes(q) ||
@@ -114,7 +114,7 @@ export default function AssignmentsPage() {
                     <p className="text-xs text-gray-400">{a.teacher.email || a.teacher.phone || "—"}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-gray-900 font-medium">{a.moduleName}</p>
+                    <p className="text-gray-900 font-medium">{a.moduleName ?? <span className="italic text-gray-400 font-normal">Untitled module</span>}</p>
                     <p className="text-xs text-gray-400 lg:hidden">{a.course.name}</p>
                     {a.group && <p className="text-xs text-emerald-600 mt-0.5">{a.group._count.members} in room</p>}
                     <p className="text-xs text-gray-500 md:hidden mt-0.5">{a.ntaLevel}</p>
