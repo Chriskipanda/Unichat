@@ -19,6 +19,9 @@ interface User {
   email: string;
   phone?: string;
   studentId?: string;
+  staffId?: string;
+  course?: string;
+  ntaLevel?: string;
   role: "student" | "teacher" | "staff" | "admin" | "class_rep";
   department?: Department | null;
   isActive: boolean;
@@ -153,6 +156,147 @@ function AddModal({ departments, onClose, onCreated }: AddModalProps) {
   );
 }
 
+interface EditModalProps {
+  user: User;
+  departments: Department[];
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function EditModal({ user, departments, onClose, onSaved }: EditModalProps) {
+  const isTeacher = user.role === "teacher" || user.role === "staff";
+  const [form, setForm] = useState({
+    fullName: user.fullName,
+    email: user.email ?? "",
+    phone: user.phone ?? "",
+    studentId: user.studentId ?? "",
+    staffId: user.staffId ?? "",
+    course: user.course ?? "",
+    ntaLevel: user.ntaLevel ?? "",
+    departmentId: user.department?.id ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    const res = await fetch(`/api/institution/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) { setError(data.error ?? "Failed to save."); return; }
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-lg font-bold text-gray-900 mb-1">Edit User</h3>
+        <p className="text-sm text-gray-500 mb-4">{roleLabel(user.role)}</p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+            <input
+              type="text"
+              value={form.fullName}
+              onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+            <input
+              type="tel"
+              value={form.phone}
+              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              placeholder="255XXXXXXXXX"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Student ID</label>
+            <input
+              type="text"
+              value={form.studentId}
+              onChange={(e) => setForm((f) => ({ ...f, studentId: e.target.value }))}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Staff ID</label>
+            <input
+              type="text"
+              value={form.staffId}
+              onChange={(e) => setForm((f) => ({ ...f, staffId: e.target.value }))}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {isTeacher ? "Course Taught" : "Programme / Course"}
+            </label>
+            <input
+              type="text"
+              value={form.course}
+              onChange={(e) => setForm((f) => ({ ...f, course: e.target.value }))}
+              placeholder="e.g. Bachelor Degree in Computer Science"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">NTA Level</label>
+            <input
+              type="text"
+              value={form.ntaLevel}
+              onChange={(e) => setForm((f) => ({ ...f, ntaLevel: e.target.value }))}
+              placeholder="e.g. NTA Level 7-2"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          {isTeacher && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+              <select
+                value={form.departmentId}
+                onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              >
+                <option value="">No department</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {error && <p className="text-red-600 text-sm">{error}</p>}
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
+            <button type="submit" disabled={saving} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-60">
+              {saving ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 const ROLE_BADGE: Record<string, string> = {
   student: "bg-blue-100 text-blue-700",
   teacher: "bg-violet-100 text-violet-700",
@@ -168,6 +312,7 @@ export default function UsersPage() {
   const [tab, setTab] = useState<RoleTab>("all");
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState<User | null>(null);
 
   async function load() {
     setLoading(true);
@@ -321,15 +466,26 @@ export default function UsersPage() {
                     </button>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => deleteUser(u.id)}
-                      className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                      title="Remove user"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => setEditing(u)}
+                        className="text-gray-400 hover:text-indigo-600 transition-colors p-1"
+                        title="Edit user"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => deleteUser(u.id)}
+                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                        title="Remove user"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -339,6 +495,14 @@ export default function UsersPage() {
       </div>
 
       {showAdd && <AddModal departments={departments} onClose={() => setShowAdd(false)} onCreated={load} />}
+      {editing && (
+        <EditModal
+          user={editing}
+          departments={departments}
+          onClose={() => setEditing(null)}
+          onSaved={load}
+        />
+      )}
     </div>
   );
 }

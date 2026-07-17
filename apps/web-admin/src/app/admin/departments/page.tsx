@@ -120,11 +120,102 @@ function AddDeptModal({ facultyId, facultyName, onClose, onCreated }: AddDeptMod
   );
 }
 
+interface BulkImportResult {
+  facultiesCreated: number;
+  departmentsCreated: number;
+  programmesCreated: number;
+  programmesSkipped: number;
+  errors: string[];
+}
+
+function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<BulkImportResult | null>(null);
+
+  async function handleImport() {
+    const rows = text
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [faculty, department, programmes] = line.split("|").map((p) => p?.trim() ?? "");
+        return { faculty, department, programmes };
+      });
+
+    if (rows.length === 0) {
+      setError("Paste at least one row first.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    const res = await fetch("/api/institution/bulk-import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) { setError(data.error ?? "Import failed."); return; }
+    setResult(data);
+    onImported();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-lg font-bold text-gray-900 mb-1">Bulk Import</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          One row per line: <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">Faculty | Department | Programme 1; Programme 2</code>.
+          Existing faculties/departments/programmes are matched by name and skipped — safe to paste the same list twice.
+        </p>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={10}
+          placeholder={"Faculty of Computing and Information Technology | Department of Computer Science | Ordinary Diploma in Computer Science; Bachelor Degree in Computer Science\nFaculty of Computing and Information Technology | Department of Information Technology | Ordinary Diploma in Information Technology; Bachelor Degree in Information Technology"}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+        {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+        {result && (
+          <div className="mt-4 bg-indigo-50 border border-indigo-100 rounded-lg p-4 text-sm space-y-1">
+            <p className="font-medium text-gray-900">Import complete</p>
+            <p className="text-gray-600">Faculties created: {result.facultiesCreated}</p>
+            <p className="text-gray-600">Departments created: {result.departmentsCreated}</p>
+            <p className="text-gray-600">Programmes created: {result.programmesCreated} (skipped {result.programmesSkipped} already present)</p>
+            {result.errors.length > 0 && (
+              <div className="pt-2">
+                <p className="text-red-600 font-medium">{result.errors.length} row(s) had problems:</p>
+                <ul className="list-disc list-inside text-red-500 text-xs">
+                  {result.errors.map((e, i) => <li key={i}>{e}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+        <div className="flex gap-3 pt-4">
+          <button type="button" onClick={onClose} className="flex-1 border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">
+            {result ? "Close" : "Cancel"}
+          </button>
+          {!result && (
+            <button type="button" onClick={handleImport} disabled={saving} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-60">
+              {saving ? "Importing…" : "Import"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DepartmentsPage() {
   const [faculties, setFaculties] = useState<Faculty[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddFaculty, setShowAddFaculty] = useState(false);
   const [addDeptFor, setAddDeptFor] = useState<Faculty | null>(null);
+  const [showBulkImport, setShowBulkImport] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -155,15 +246,26 @@ export default function DepartmentsPage() {
           <h2 className="text-xl font-bold text-gray-900">Departments</h2>
           <p className="text-gray-500 text-sm">Manage faculties and departments</p>
         </div>
-        <button
-          onClick={() => setShowAddFaculty(true)}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Add Faculty
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowBulkImport(true)}
+            className="flex items-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Bulk Import
+          </button>
+          <button
+            onClick={() => setShowAddFaculty(true)}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Faculty
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -235,6 +337,7 @@ export default function DepartmentsPage() {
 
       {showAddFaculty && <AddFacultyModal onClose={() => setShowAddFaculty(false)} onCreated={load} />}
       {addDeptFor && <AddDeptModal facultyId={addDeptFor.id} facultyName={addDeptFor.name} onClose={() => setAddDeptFor(null)} onCreated={load} />}
+      {showBulkImport && <BulkImportModal onClose={() => setShowBulkImport(false)} onImported={load} />}
     </div>
   );
 }

@@ -493,7 +493,10 @@ fastify.post('/api/v1/institution/users', { preHandler: institutionAdminOnly }, 
 fastify.patch('/api/v1/institution/users/:id', { preHandler: institutionAdminOnly }, async (request, reply) => {
   const { id } = request.params;
   const { tenantId } = request.user;
-  const { isActive, role, fullName, phone, course, ntaLevel, departmentId } = request.body || {};
+  const {
+    isActive, role, fullName, email, phone, studentId, staffId,
+    course, ntaLevel, departmentId,
+  } = request.body || {};
 
   if (role === 'superadmin' || role === 'admin') return reply.code(400).send({ error: 'Cannot set this role' });
 
@@ -501,12 +504,22 @@ fastify.patch('/api/v1/institution/users/:id', { preHandler: institutionAdminOnl
   if (isActive !== undefined) data.isActive = isActive;
   if (role) data.role = role;
   if (fullName) data.fullName = fullName;
+  if (email !== undefined) data.email = email || null;
   if (phone !== undefined) data.phone = phone || null;
+  if (studentId !== undefined) data.studentId = studentId || null;
+  if (staffId !== undefined) data.staffId = staffId || null;
   if (course !== undefined) data.course = course || null;
   if (ntaLevel !== undefined) data.ntaLevel = ntaLevel || null;
   if (departmentId !== undefined) data.departmentId = departmentId || null;
 
-  const result = await prisma.user.updateMany({ where: { id, tenantId }, data });
+  let result;
+  try {
+    result = await prisma.user.updateMany({ where: { id, tenantId }, data });
+  } catch (err) {
+    if (err.code === 'P2002') return reply.code(409).send({ error: 'A user with this ID or email already exists' });
+    fastify.log.error(err);
+    return reply.code(500).send({ error: 'Internal server error' });
+  }
   if (result.count === 0) return reply.code(404).send({ error: 'User not found' });
   const user = await prisma.user.findUnique({
     where: { id },
@@ -653,6 +666,61 @@ fastify.delete('/api/v1/institution/courses/:id', { preHandler: institutionAdmin
   const result = await prisma.course.deleteMany({ where: { id, tenantId } });
   if (result.count === 0) return reply.code(404).send({ error: 'Course not found' });
   return reply.code(204).send();
+});
+
+// Bulk import — paste a whole faculty/department/programme table at once
+// instead of adding each one by hand. Idempotent: matches existing
+// faculties/departments by name and only creates what's missing, same
+// logic as infrastructure/database/seed-programmes.js.
+fastify.post('/api/v1/institution/bulk-import', { preHandler: institutionAdminOnly }, async (request, reply) => {
+  const { tenantId } = request.user;
+  const { rows } = request.body || {};
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return reply.code(400).send({ error: 'rows array is required' });
+  }
+
+  let facultiesCreated = 0, departmentsCreated = 0, programmesCreated = 0, programmesSkipped = 0;
+  const errors = [];
+
+  for (const row of rows) {
+    const facultyName = (row.faculty || '').trim();
+    const deptName = (row.department || '').trim();
+    const programmeNames = (row.programmes || '')
+      .split(/[;,]/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    if (!facultyName || !deptName) {
+      errors.push(`Skipped — faculty and department are required: ${JSON.stringify(row)}`);
+      continue;
+    }
+
+    try {
+      let faculty = await prisma.faculty.findFirst({ where: { tenantId, name: facultyName } });
+      if (!faculty) {
+        faculty = await prisma.faculty.create({ data: { tenantId, name: facultyName } });
+        facultiesCreated++;
+      }
+
+      let department = await prisma.department.findFirst({ where: { tenantId, facultyId: faculty.id, name: deptName } });
+      if (!department) {
+        department = await prisma.department.create({ data: { tenantId, facultyId: faculty.id, name: deptName } });
+        departmentsCreated++;
+      }
+
+      for (const programmeName of programmeNames) {
+        const existing = await prisma.course.findFirst({ where: { tenantId, departmentId: department.id, name: programmeName } });
+        if (existing) { programmesSkipped++; continue; }
+        await prisma.course.create({ data: { tenantId, departmentId: department.id, name: programmeName } });
+        programmesCreated++;
+      }
+    } catch (err) {
+      fastify.log.error(err);
+      errors.push(`Failed on "${facultyName} / ${deptName}": ${err.message}`);
+    }
+  }
+
+  return { facultiesCreated, departmentsCreated, programmesCreated, programmesSkipped, errors };
 });
 
 // ─────────────────────────────────────────────────────────────────
