@@ -268,8 +268,14 @@ const start = async () => {
     await fastify.listen({ port: process.env.PORT || 3002, host: '0.0.0.0' });
 
     // Attach Socket.IO (assign to module-level var so HTTP handlers can broadcast)
+    // Shorter ping cycle than the engine.io default (25s interval/20s timeout,
+    // ~45s worst case): mobile networks silently drop idle sockets without a
+    // FIN, and the client only notices — and reconnects — on a missed pong.
+    // A tighter cycle bounds that "stuck until reconnect" window.
     io = new Server(fastify.server, {
-      cors: { origin: '*' }
+      cors: { origin: '*' },
+      pingInterval: 10000,
+      pingTimeout: 8000,
     });
 
     await producer.connect();

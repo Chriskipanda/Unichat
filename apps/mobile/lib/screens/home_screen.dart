@@ -58,6 +58,12 @@ class _HomeScreenState extends State<HomeScreen> {
   // no need to open the chat first. Mirrors chat_screen.dart's per-room socket.
   io.Socket? _socket;
   final Set<String> _joinedRooms = {};
+  // Safety net, not the primary delivery path: mobile networks can drop a
+  // socket silently (no FIN), so the client doesn't always notice right away
+  // even with reconnection configured. This bounds any such gap to ~20s
+  // instead of leaving the list stale until the user manually refreshes.
+  // _loadRooms() is a no-op on the UI (no spinner) once _chats is non-empty.
+  Timer? _refreshTimer;
 
   @override
   void initState() {
@@ -66,6 +72,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadClubs();
     _loadSuggestedAcademic();
     _connectSocket();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (mounted) _loadRooms();
+    });
   }
 
   @override
@@ -74,6 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _socket?.disconnect();
     _bannerTimer?.cancel();
     _bannerEntry?.remove();
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
