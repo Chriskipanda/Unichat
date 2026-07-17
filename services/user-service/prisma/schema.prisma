@@ -22,12 +22,14 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users       User[]
-  faculties   Faculty[]
-  departments Department[]
-  cohorts     Cohort[]
-  groups      Group[]
-  messages    Message[]
+  users              User[]
+  faculties          Faculty[]
+  departments        Department[]
+  cohorts            Cohort[]
+  groups             Group[]
+  messages           Message[]
+  courses            Course[]
+  teacherAssignments TeacherAssignment[]
 
   @@map("tenants")
 }
@@ -44,16 +46,20 @@ model User {
   role         String    @default("student")
   course       String?
   ntaLevel     String?
+  departmentId String?   @db.Uuid
   avatarUrl    String?
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
   lastLogin    DateTime?
 
-  tenant       Tenant        @relation(fields: [tenantId], references: [id])
-  groups       GroupMember[]
-  messages     Message[]
-  sessions     Session[]
-  createdGroups Group[]      @relation("GroupCreator")
+  tenant            Tenant              @relation(fields: [tenantId], references: [id])
+  department        Department?         @relation(fields: [departmentId], references: [id])
+  groups            GroupMember[]
+  messages          Message[]
+  sessions          Session[]
+  createdGroups     Group[]             @relation("GroupCreator")
+  taughtAssignments TeacherAssignment[] @relation("TeacherAssignments")
+  crAssignments     TeacherAssignment[] @relation("ClassReps")
 
   @@unique([tenantId, email])
   @@unique([tenantId, studentId])
@@ -84,6 +90,8 @@ model Department {
   faculty   Faculty  @relation(fields: [facultyId], references: [id])
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   cohorts   Cohort[]
+  courses   Course[]
+  teachers  User[]
 
   @@map("departments")
 }
@@ -164,4 +172,42 @@ model Session {
   user User @relation(fields: [userId], references: [id])
 
   @@map("sessions")
+}
+
+// A course belongs to a department; a teacher "teaches" it at a given NTA
+// level via a TeacherAssignment, which is also where a Class Rep gets pinned.
+model Course {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  departmentId String   @db.Uuid
+  name         String
+  createdAt    DateTime @default(now())
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id])
+  department  Department          @relation(fields: [departmentId], references: [id])
+  assignments TeacherAssignment[]
+
+  @@map("courses")
+}
+
+// One row per (teacher, course, NTA level) they're assigned to teach. crUserId
+// is the student promoted to Class Rep for that specific course+level — role
+// promotion/demotion on the User itself is handled in application code, this
+// row is the source of truth for which assignment granted it.
+model TeacherAssignment {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  teacherId String   @db.Uuid
+  courseId  String   @db.Uuid
+  ntaLevel  String
+  crUserId  String?  @db.Uuid
+  createdAt DateTime @default(now())
+
+  tenant  Tenant @relation(fields: [tenantId], references: [id])
+  teacher User   @relation("TeacherAssignments", fields: [teacherId], references: [id])
+  course  Course @relation(fields: [courseId], references: [id])
+  cr      User?  @relation("ClassReps", fields: [crUserId], references: [id])
+
+  @@unique([teacherId, courseId, ntaLevel])
+  @@map("teacher_assignments")
 }

@@ -45,6 +45,20 @@ const institutionAdminOnly = async (request, reply) => {
   }
 };
 
+const TEACHER_ROLES = ['teacher', 'lecturer', 'staff'];
+
+const teacherOnly = async (request, reply) => {
+  try {
+    await request.jwtVerify();
+    if (!TEACHER_ROLES.includes(request.user.role))
+      return reply.code(403).send({ error: 'Teacher access required' });
+    if (!request.user.tenantId)
+      return reply.code(403).send({ error: 'No institution scope in token' });
+  } catch {
+    return reply.code(401).send({ error: 'Invalid or expired token' });
+  }
+};
+
 // ─────────────────────────────────────────────────────────────────
 // Health
 // ─────────────────────────────────────────────────────────────────
@@ -160,6 +174,83 @@ fastify.post('/api/v1/auth/institution/verify-otp', async (request, reply) => {
       id: user.id,
       fullName: user.fullName,
       email: user.email,
+      role: user.role,
+      tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug, branding: tenant.branding },
+    },
+  };
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Teacher — OTP login (role-gated to teacher/lecturer/staff)
+// ─────────────────────────────────────────────────────────────────
+fastify.post('/api/v1/auth/teacher/request-otp', async (request, reply) => {
+  const { identifier, tenantSlug } = request.body || {};
+  if (!identifier || !tenantSlug)
+    return reply.code(400).send({ error: 'Identifier and institution slug required' });
+
+  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+  if (!tenant) return reply.code(404).send({ error: 'Institution not found' });
+  if (tenant.status !== 'active') return reply.code(403).send({ error: 'Institution is not active' });
+
+  const user = await prisma.user.findFirst({
+    where: {
+      tenantId: tenant.id,
+      role: { in: TEACHER_ROLES },
+      isActive: true,
+      OR: [{ email: identifier }, { staffId: identifier }, { phone: identifier }],
+    },
+  });
+  if (!user) return reply.code(404).send({ error: 'Teacher account not found for this institution' });
+
+  const otp = otpService.generateOtp();
+  await redis.set(`otp:teacher:${tenant.id}:${user.id}`, otp, 'EX', 300);
+
+  const sms = await smsService.sendOtp(user.phone, otp);
+  if (sms.sent) {
+    fastify.log.info(`[TEACHER OTP] ${user.fullName} @ ${tenant.slug}: sent via SMS to ${smsService.maskPhone(user.phone)}`);
+  } else {
+    fastify.log.info(`[TEACHER OTP] ${user.fullName} @ ${tenant.slug}: ${otp}  [sms: ${sms.reason || sms.error}]`);
+  }
+
+  return { message: 'OTP sent', user: { fullName: user.fullName, email: user.email } };
+});
+
+fastify.post('/api/v1/auth/teacher/verify-otp', async (request, reply) => {
+  const { identifier, tenantSlug, otp } = request.body || {};
+
+  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+  if (!tenant) return reply.code(404).send({ error: 'Institution not found' });
+
+  const user = await prisma.user.findFirst({
+    where: {
+      tenantId: tenant.id,
+      role: { in: TEACHER_ROLES },
+      isActive: true,
+      OR: [{ email: identifier }, { staffId: identifier }, { phone: identifier }],
+    },
+  });
+  if (!user) return reply.code(404).send({ error: 'Teacher account not found' });
+
+  const redisKey = `otp:teacher:${tenant.id}:${user.id}`;
+  const storedOtp = await redis.get(redisKey);
+  if (!storedOtp) return reply.code(400).send({ error: 'OTP expired or not requested' });
+  if (storedOtp !== otp) return reply.code(400).send({ error: 'Invalid OTP' });
+
+  await redis.del(redisKey);
+
+  const token = fastify.jwt.sign(
+    { userId: user.id, tenantId: tenant.id, role: user.role },
+    { expiresIn: '12h' }
+  );
+  await prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } });
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      phone: user.phone,
       role: user.role,
       tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug, branding: tenant.branding },
     },
@@ -363,6 +454,7 @@ fastify.get('/api/v1/institution/users', { preHandler: institutionAdminOnly }, a
       select: {
         id: true, fullName: true, email: true, phone: true, studentId: true,
         staffId: true, role: true, course: true, ntaLevel: true,
+        department: { select: { id: true, name: true } },
         isActive: true, createdAt: true, lastLogin: true,
       },
     }),
@@ -373,7 +465,7 @@ fastify.get('/api/v1/institution/users', { preHandler: institutionAdminOnly }, a
 
 fastify.post('/api/v1/institution/users', { preHandler: institutionAdminOnly }, async (request, reply) => {
   const { tenantId } = request.user;
-  const { fullName, email, phone, studentId, staffId, role, course, ntaLevel } = request.body || {};
+  const { fullName, email, phone, studentId, staffId, role, course, ntaLevel, departmentId } = request.body || {};
   if (!fullName) return reply.code(400).send({ error: 'Full name is required' });
 
   try {
@@ -381,11 +473,12 @@ fastify.post('/api/v1/institution/users', { preHandler: institutionAdminOnly }, 
       data: {
         tenantId, fullName, email: email || null, phone: phone || null,
         studentId: studentId || null, staffId: staffId || null, role: role || 'student',
-        course: course || null, ntaLevel: ntaLevel || null, isActive: true,
+        course: course || null, ntaLevel: ntaLevel || null, departmentId: departmentId || null, isActive: true,
       },
       select: {
         id: true, fullName: true, email: true, phone: true, studentId: true,
         staffId: true, role: true, course: true, ntaLevel: true,
+        department: { select: { id: true, name: true } },
         isActive: true, createdAt: true,
       },
     });
@@ -400,7 +493,7 @@ fastify.post('/api/v1/institution/users', { preHandler: institutionAdminOnly }, 
 fastify.patch('/api/v1/institution/users/:id', { preHandler: institutionAdminOnly }, async (request, reply) => {
   const { id } = request.params;
   const { tenantId } = request.user;
-  const { isActive, role, fullName, phone, course, ntaLevel } = request.body || {};
+  const { isActive, role, fullName, phone, course, ntaLevel, departmentId } = request.body || {};
 
   if (role === 'superadmin' || role === 'admin') return reply.code(400).send({ error: 'Cannot set this role' });
 
@@ -411,6 +504,7 @@ fastify.patch('/api/v1/institution/users/:id', { preHandler: institutionAdminOnl
   if (phone !== undefined) data.phone = phone || null;
   if (course !== undefined) data.course = course || null;
   if (ntaLevel !== undefined) data.ntaLevel = ntaLevel || null;
+  if (departmentId !== undefined) data.departmentId = departmentId || null;
 
   const result = await prisma.user.updateMany({ where: { id, tenantId }, data });
   if (result.count === 0) return reply.code(404).send({ error: 'User not found' });
@@ -418,7 +512,8 @@ fastify.patch('/api/v1/institution/users/:id', { preHandler: institutionAdminOnl
     where: { id },
     select: {
       id: true, fullName: true, email: true, phone: true, studentId: true,
-      staffId: true, role: true, course: true, ntaLevel: true, isActive: true,
+      staffId: true, role: true, course: true, ntaLevel: true,
+      department: { select: { id: true, name: true } }, isActive: true,
     },
   });
   return { user };
@@ -521,6 +616,196 @@ fastify.delete('/api/v1/institution/clubs/:id', { preHandler: institutionAdminOn
   const { tenantId } = request.user;
   const result = await prisma.group.deleteMany({ where: { id, tenantId, type: 'club' } });
   if (result.count === 0) return reply.code(404).send({ error: 'Club not found' });
+  return reply.code(204).send();
+});
+
+// Courses — catalog under a department; teachers pick from these when
+// registering what they teach.
+fastify.get('/api/v1/institution/courses', { preHandler: institutionAdminOnly }, async (request, reply) => {
+  const { tenantId } = request.user;
+  const courses = await prisma.course.findMany({
+    where: { tenantId },
+    include: { department: { select: { id: true, name: true } } },
+    orderBy: { name: 'asc' },
+  });
+  return { courses };
+});
+
+fastify.post('/api/v1/institution/courses', { preHandler: institutionAdminOnly }, async (request, reply) => {
+  const { tenantId } = request.user;
+  const { name, departmentId } = request.body || {};
+  if (!name || !departmentId) return reply.code(400).send({ error: 'Name and departmentId are required' });
+  try {
+    const course = await prisma.course.create({
+      data: { tenantId, name, departmentId },
+      include: { department: { select: { id: true, name: true } } },
+    });
+    return reply.code(201).send({ course });
+  } catch (err) {
+    fastify.log.error(err);
+    return reply.code(500).send({ error: 'Internal server error' });
+  }
+});
+
+fastify.delete('/api/v1/institution/courses/:id', { preHandler: institutionAdminOnly }, async (request, reply) => {
+  const { id } = request.params;
+  const { tenantId } = request.user;
+  const result = await prisma.course.deleteMany({ where: { id, tenantId } });
+  if (result.count === 0) return reply.code(404).send({ error: 'Course not found' });
+  return reply.code(204).send();
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Teacher — self-service: profile, course/NTA-level assignments, and
+// picking a Class Rep (CR) per assignment. Being CR grants the student
+// group/club creation rights app-wide, so promotion/demotion here is the
+// single source of truth for that role — a student stays 'class_rep' only
+// as long as they hold at least one CR assignment.
+// ─────────────────────────────────────────────────────────────────
+async function demoteIfOrphanedCr(studentId, tenantId) {
+  const stillCr = await prisma.teacherAssignment.findFirst({ where: { crUserId: studentId, tenantId } });
+  if (stillCr) return;
+  const student = await prisma.user.findUnique({ where: { id: studentId }, select: { role: true } });
+  if (student?.role === 'class_rep') {
+    await prisma.user.update({ where: { id: studentId }, data: { role: 'student' } });
+  }
+}
+
+const ASSIGNMENT_INCLUDE = {
+  course: { select: { id: true, name: true, department: { select: { id: true, name: true } } } },
+  cr: { select: { id: true, fullName: true, studentId: true, phone: true } },
+};
+
+fastify.get('/api/v1/teacher/me', { preHandler: teacherOnly }, async (request, reply) => {
+  const { userId, tenantId } = request.user;
+  const teacher = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true, fullName: true, email: true, phone: true, role: true,
+      department: { select: { id: true, name: true } },
+    },
+  });
+  if (!teacher) return reply.code(404).send({ error: 'Teacher not found' });
+
+  const assignments = await prisma.teacherAssignment.findMany({
+    where: { teacherId: userId, tenantId },
+    include: ASSIGNMENT_INCLUDE,
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return { teacher, assignments };
+});
+
+fastify.get('/api/v1/teacher/courses', { preHandler: teacherOnly }, async (request, reply) => {
+  const { tenantId } = request.user;
+  const courses = await prisma.course.findMany({
+    where: { tenantId },
+    include: { department: { select: { id: true, name: true } } },
+    orderBy: { name: 'asc' },
+  });
+  return { courses };
+});
+
+fastify.post('/api/v1/teacher/assignments', { preHandler: teacherOnly }, async (request, reply) => {
+  const { userId, tenantId } = request.user;
+  const { courseId, ntaLevel } = request.body || {};
+  if (!courseId || !ntaLevel) return reply.code(400).send({ error: 'courseId and ntaLevel are required' });
+
+  const course = await prisma.course.findFirst({ where: { id: courseId, tenantId } });
+  if (!course) return reply.code(404).send({ error: 'Course not found' });
+
+  try {
+    const assignment = await prisma.teacherAssignment.create({
+      data: { tenantId, teacherId: userId, courseId, ntaLevel: ntaLevel.trim() },
+      include: ASSIGNMENT_INCLUDE,
+    });
+    return reply.code(201).send({ assignment });
+  } catch (err) {
+    if (err.code === 'P2002') return reply.code(409).send({ error: 'You already teach this course at this NTA level' });
+    fastify.log.error(err);
+    return reply.code(500).send({ error: 'Internal server error' });
+  }
+});
+
+fastify.delete('/api/v1/teacher/assignments/:id', { preHandler: teacherOnly }, async (request, reply) => {
+  const { id } = request.params;
+  const { userId, tenantId } = request.user;
+
+  const assignment = await prisma.teacherAssignment.findFirst({ where: { id, teacherId: userId, tenantId } });
+  if (!assignment) return reply.code(404).send({ error: 'Assignment not found' });
+
+  await prisma.teacherAssignment.delete({ where: { id } });
+  if (assignment.crUserId) await demoteIfOrphanedCr(assignment.crUserId, tenantId);
+
+  return reply.code(204).send();
+});
+
+// Class Rep candidates — students (or existing CRs, so a teacher can see who
+// currently holds it) in the same institution.
+fastify.get('/api/v1/teacher/students', { preHandler: teacherOnly }, async (request, reply) => {
+  const { tenantId } = request.user;
+  const { search = '', limit = '20' } = request.query || {};
+  const students = await prisma.user.findMany({
+    where: {
+      tenantId,
+      role: { in: ['student', 'class_rep'] },
+      isActive: true,
+      ...(search
+        ? {
+            OR: [
+              { fullName: { contains: search, mode: 'insensitive' } },
+              { studentId: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    },
+    select: { id: true, fullName: true, studentId: true, course: true, ntaLevel: true, role: true },
+    orderBy: { fullName: 'asc' },
+    take: parseInt(limit),
+  });
+  return { students };
+});
+
+fastify.post('/api/v1/teacher/assignments/:id/cr', { preHandler: teacherOnly }, async (request, reply) => {
+  const { id } = request.params;
+  const { userId, tenantId } = request.user;
+  const { studentUserId } = request.body || {};
+  if (!studentUserId) return reply.code(400).send({ error: 'studentUserId is required' });
+
+  const assignment = await prisma.teacherAssignment.findFirst({ where: { id, teacherId: userId, tenantId } });
+  if (!assignment) return reply.code(404).send({ error: 'Assignment not found' });
+
+  const student = await prisma.user.findFirst({
+    where: { id: studentUserId, tenantId, role: { in: ['student', 'class_rep'] } },
+  });
+  if (!student) return reply.code(404).send({ error: 'Student not found' });
+
+  const previousCrId = assignment.crUserId;
+
+  await prisma.$transaction([
+    prisma.teacherAssignment.update({ where: { id }, data: { crUserId: studentUserId } }),
+    prisma.user.update({ where: { id: studentUserId }, data: { role: 'class_rep' } }),
+  ]);
+  if (previousCrId && previousCrId !== studentUserId) {
+    await demoteIfOrphanedCr(previousCrId, tenantId);
+  }
+
+  const updated = await prisma.teacherAssignment.findUnique({ where: { id }, include: ASSIGNMENT_INCLUDE });
+  return { assignment: updated };
+});
+
+fastify.delete('/api/v1/teacher/assignments/:id/cr', { preHandler: teacherOnly }, async (request, reply) => {
+  const { id } = request.params;
+  const { userId, tenantId } = request.user;
+
+  const assignment = await prisma.teacherAssignment.findFirst({ where: { id, teacherId: userId, tenantId } });
+  if (!assignment) return reply.code(404).send({ error: 'Assignment not found' });
+  if (!assignment.crUserId) return reply.code(204).send();
+
+  const previousCrId = assignment.crUserId;
+  await prisma.teacherAssignment.update({ where: { id }, data: { crUserId: null } });
+  await demoteIfOrphanedCr(previousCrId, tenantId);
+
   return reply.code(204).send();
 });
 

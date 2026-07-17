@@ -2,13 +2,25 @@
 
 import { useEffect, useState } from "react";
 
+interface Department {
+  id: string;
+  name: string;
+}
+
+interface Faculty {
+  id: string;
+  name: string;
+  departments: Department[];
+}
+
 interface User {
   id: string;
   fullName: string;
   email: string;
   phone?: string;
   studentId?: string;
-  role: "student" | "teacher" | "staff" | "admin";
+  role: "student" | "teacher" | "staff" | "admin" | "class_rep";
+  department?: Department | null;
   isActive: boolean;
   createdAt: string;
 }
@@ -20,20 +32,24 @@ type RoleTab = typeof ROLE_TABS[number];
 function roleLabel(role: string) {
   if (role === "staff" || role === "teacher") return "Teacher";
   if (role === "admin") return "Admin";
+  if (role === "class_rep") return "Class Rep";
   return "Student";
 }
 
 interface AddModalProps {
+  departments: Department[];
   onClose: () => void;
   onCreated: () => void;
 }
 
-function AddModal({ onClose, onCreated }: AddModalProps) {
+function AddModal({ departments, onClose, onCreated }: AddModalProps) {
   const [form, setForm] = useState({
     fullName: "",
     email: "",
+    phone: "",
     studentId: "",
     role: "student" as "student" | "teacher",
+    departmentId: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -79,6 +95,16 @@ function AddModal({ onClose, onCreated }: AddModalProps) {
             />
           </div>
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+            <input
+              type="tel"
+              value={form.phone}
+              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              placeholder="255XXXXXXXXX"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Student / Staff ID</label>
             <input
               type="text"
@@ -99,6 +125,21 @@ function AddModal({ onClose, onCreated }: AddModalProps) {
               <option value="teacher">Teacher</option>
             </select>
           </div>
+          {form.role === "teacher" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+              <select
+                value={form.departmentId}
+                onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              >
+                <option value="">No department yet</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
@@ -117,10 +158,12 @@ const ROLE_BADGE: Record<string, string> = {
   teacher: "bg-violet-100 text-violet-700",
   staff: "bg-violet-100 text-violet-700",
   admin: "bg-indigo-100 text-indigo-700",
+  class_rep: "bg-amber-100 text-amber-700",
 };
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<RoleTab>("all");
   const [search, setSearch] = useState("");
@@ -128,9 +171,14 @@ export default function UsersPage() {
 
   async function load() {
     setLoading(true);
-    const res = await fetch("/api/institution/users");
-    const data = await res.json();
-    setUsers(data.users ?? []);
+    const [usersRes, deptRes] = await Promise.all([
+      fetch("/api/institution/users"),
+      fetch("/api/institution/departments"),
+    ]);
+    const usersData = await usersRes.json();
+    const deptData = await deptRes.json();
+    setUsers(usersData.users ?? []);
+    setDepartments(((deptData.faculties ?? []) as Faculty[]).flatMap((f) => f.departments));
     setLoading(false);
   }
 
@@ -141,6 +189,15 @@ export default function UsersPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isActive: !user.isActive }),
+    });
+    load();
+  }
+
+  async function assignDepartment(user: User, departmentId: string) {
+    await fetch(`/api/institution/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ departmentId: departmentId || null }),
     });
     load();
   }
@@ -156,6 +213,7 @@ export default function UsersPage() {
     const matchesTab =
       tab === "all" ||
       (tab === "teacher" && (u.role === "teacher" || u.role === "staff")) ||
+      (tab === "student" && (u.role === "student" || u.role === "class_rep")) ||
       u.role === tab;
     const matchesSearch =
       !search ||
@@ -221,6 +279,7 @@ export default function UsersPage() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Name</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide hidden md:table-cell">Contact / ID</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Role</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide hidden lg:table-cell">Department</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Status</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -236,6 +295,22 @@ export default function UsersPage() {
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_BADGE[u.role] ?? "bg-gray-100 text-gray-600"}`}>
                       {roleLabel(u.role)}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 hidden lg:table-cell">
+                    {u.role === "teacher" || u.role === "staff" ? (
+                      <select
+                        value={u.department?.id ?? ""}
+                        onChange={(e) => assignDepartment(u, e.target.value)}
+                        className="border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                      >
+                        <option value="">Unassigned</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <button
@@ -263,7 +338,7 @@ export default function UsersPage() {
         )}
       </div>
 
-      {showAdd && <AddModal onClose={() => setShowAdd(false)} onCreated={load} />}
+      {showAdd && <AddModal departments={departments} onClose={() => setShowAdd(false)} onCreated={load} />}
     </div>
   );
 }

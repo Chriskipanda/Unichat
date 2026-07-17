@@ -695,9 +695,17 @@ class _HomeScreenState extends State<HomeScreen> {
            r == 'admin'   || r == 'class_rep';
   }
 
-  bool get _canCreateClub {
+  // Cohort/course rooms stay teacher+admin only — a Class Rep's grant is
+  // scoped to ad-hoc groups and clubs, not the formal academic structure.
+  bool get _canCreateAcademic {
     final r = widget.user.role.toLowerCase();
     return r == 'teacher' || r == 'lecturer' || r == 'staff' || r == 'admin';
+  }
+
+  bool get _canCreateClub {
+    final r = widget.user.role.toLowerCase();
+    return r == 'teacher' || r == 'lecturer' || r == 'staff' ||
+           r == 'admin'   || r == 'class_rep';
   }
 
   // ── Create Group Sheet ─────────────────────────────────────────
@@ -2334,7 +2342,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: const Icon(Icons.chat_rounded),
         );
       case 1: // Academic — create cohort/course (teachers/admin only)
-        if (!_canCreateClub) return null;
+        if (!_canCreateAcademic) return null;
         return FloatingActionButton.extended(
           onPressed: _showCreateAcademicSheet,
           backgroundColor: AppColors.brand,
