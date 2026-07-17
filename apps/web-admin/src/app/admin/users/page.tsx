@@ -475,6 +475,7 @@ export default function UsersPage() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-12 text-gray-400 text-sm">No users found.</div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-indigo-50 border-b border-indigo-100">
               <tr>
@@ -589,6 +590,7 @@ export default function UsersPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
