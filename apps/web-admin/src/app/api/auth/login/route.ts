@@ -26,7 +26,12 @@ export async function POST(request: Request) {
   const response = NextResponse.json({ success: true, user: data.user });
   response.cookies.set("unichat_admin_token", data.token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    // Tied to an explicit flag, not NODE_ENV: this app runs in production
+    // mode on a plain-HTTP VPS IP with no domain/TLS yet, and a Secure
+    // cookie is silently dropped by the browser over HTTP — login would
+    // "succeed" (200) but never actually persist a session. Set
+    // COOKIE_SECURE=true once this is served over HTTPS.
+    secure: process.env.COOKIE_SECURE === "true",
     sameSite: "lax",
     maxAge: 60 * 60 * 24,
     path: "/",

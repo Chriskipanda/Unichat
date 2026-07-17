@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   const response = NextResponse.json({ success: true, user: data.user });
   response.cookies.set("unichat_teacher_token", data.token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.COOKIE_SECURE === "true",
     sameSite: "lax",
     maxAge: 60 * 60 * 12,
     path: "/",
