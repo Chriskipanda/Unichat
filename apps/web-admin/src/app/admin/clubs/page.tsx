@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 interface Club {
   id: string;
@@ -44,64 +52,64 @@ function ClubModal({ club, onClose, onSaved }: ClubModalProps) {
         });
     const data = await res.json();
     setSaving(false);
-    if (!res.ok) { setError(data.error ?? "Failed."); return; }
+    if (!res.ok) {
+      setError(data.error ?? "Failed.");
+      return;
+    }
     onSaved();
     onClose();
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">{isEdit ? "Edit Club" : "Add Club"}</h3>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? "Edit Club" : "Add Club"}</DialogTitle>
+        </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              required
-            />
+            <Label className="mb-1.5">Name</Label>
+            <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-            <input
-              type="text"
+            <Label className="mb-1.5">Category</Label>
+            <Input
               value={form.category}
               onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
               placeholder="e.g. Academic, Sports, Culture"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
+            <Label className="mb-1.5">Description</Label>
+            <Textarea
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               rows={3}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              className="resize-none"
             />
           </div>
-          {error && <p className="text-red-600 text-sm">{error}</p>}
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-            <button type="submit" disabled={saving} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-60">
+          {error && <p className="text-destructive text-sm">{error}</p>}
+          <DialogFooter className="-mx-0 -mb-0 border-t-0 bg-transparent p-0">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving} className="flex-1">
+              {saving && <Loader2 className="animate-spin" />}
               {saving ? "Saving…" : isEdit ? "Save" : "Add Club"}
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  Academic: "bg-blue-100 text-blue-700",
-  Sports: "bg-green-100 text-green-700",
-  Culture: "bg-amber-100 text-amber-700",
-  Technology: "bg-purple-100 text-purple-700",
-  Arts: "bg-pink-100 text-pink-700",
+const CATEGORY_CLASS: Record<string, string> = {
+  Academic: "bg-[var(--info)]/10 text-[var(--info)]",
+  Sports: "bg-[var(--success)]/10 text-[var(--success)]",
+  Culture: "bg-[var(--warning)]/10 text-[var(--warning)]",
+  Technology: "bg-primary/10 text-primary",
+  Arts: "bg-[var(--chart-5)]/10 text-[var(--chart-5)]",
 };
 
 export default function ClubsPage() {
@@ -118,7 +126,9 @@ export default function ClubsPage() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   async function toggleActive(club: Club) {
     await fetch(`/api/institution/clubs/${club.id}`, {
@@ -139,74 +149,62 @@ export default function ClubsPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Clubs</h2>
-          <p className="text-gray-500 text-sm">{clubs.length} registered</p>
+          <h2 className="text-heading">Clubs</h2>
+          <p className="text-subtitle">{clubs.length} registered</p>
         </div>
-        <button
-          onClick={() => { setEditing(undefined); setShowModal(true); }}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+        <Button
+          onClick={() => {
+            setEditing(undefined);
+            setShowModal(true);
+          }}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+          <Plus />
           Add Club
-        </button>
+        </Button>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center h-32">
-          <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <Loader2 className="w-5 h-5 text-primary animate-spin" />
         </div>
       ) : clubs.length === 0 ? (
-        <div className="bg-white border border-indigo-100 rounded-xl p-12 text-center text-gray-400 text-sm">
-          No clubs yet. Create your first student club.
-        </div>
+        <Card className="p-12 text-center text-muted-foreground text-sm">No clubs yet. Create your first student club.</Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {clubs.map((club) => (
-            <div
-              key={club.id}
-              className={`bg-white border rounded-xl p-5 flex flex-col gap-3 transition-all ${club.isActive ? "border-indigo-100" : "border-gray-100 opacity-60"}`}
-            >
+            <Card key={club.id} className={`p-5 gap-3 transition-all ${!club.isActive && "opacity-60"}`}>
               <div className="flex items-start justify-between gap-2">
-                <h3 className="font-semibold text-gray-900 leading-tight">{club.name}</h3>
+                <h3 className="font-semibold text-foreground leading-tight">{club.name}</h3>
                 {club.category && (
-                  <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[club.category] ?? "bg-indigo-100 text-indigo-700"}`}>
-                    {club.category}
-                  </span>
+                  <Badge className={`shrink-0 ${CATEGORY_CLASS[club.category] ?? "bg-primary/10 text-primary"}`}>{club.category}</Badge>
                 )}
               </div>
-              {club.description && (
-                <p className="text-sm text-gray-500 line-clamp-2">{club.description}</p>
-              )}
-              <div className="flex items-center gap-2 mt-auto pt-2 border-t border-gray-100">
-                <button
-                  onClick={() => toggleActive(club)}
-                  className={`text-xs px-2.5 py-1 rounded-full font-medium ${club.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}
-                >
-                  {club.isActive ? "Active" : "Inactive"}
+              {club.description && <p className="text-sm text-muted-foreground line-clamp-2">{club.description}</p>}
+              <div className="flex items-center gap-1 mt-auto pt-2 border-t border-border">
+                <button onClick={() => toggleActive(club)}>
+                  <Badge
+                    className={club.isActive ? "bg-[var(--success)]/10 text-[var(--success)] cursor-pointer" : "bg-muted text-muted-foreground cursor-pointer"}
+                  >
+                    {club.isActive ? "Active" : "Inactive"}
+                  </Badge>
                 </button>
                 <div className="flex-1" />
-                <button
-                  onClick={() => { setEditing(club); setShowModal(true); }}
-                  className="text-indigo-400 hover:text-indigo-600 p-1 rounded"
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => {
+                    setEditing(club);
+                    setShowModal(true);
+                  }}
                   title="Edit"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => deleteClub(club.id)}
-                  className="text-gray-400 hover:text-red-500 p-1 rounded"
-                  title="Delete"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                  <Pencil className="w-3.5 h-3.5" />
+                </Button>
+                <Button variant="ghost" size="icon-sm" className="hover:text-destructive" onClick={() => deleteClub(club.id)} title="Delete">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}
@@ -214,7 +212,10 @@ export default function ClubsPage() {
       {showModal && (
         <ClubModal
           club={editing}
-          onClose={() => { setShowModal(false); setEditing(undefined); }}
+          onClose={() => {
+            setShowModal(false);
+            setEditing(undefined);
+          }}
           onSaved={load}
         />
       )}

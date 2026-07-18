@@ -1,7 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, Loader2, AlertCircle } from "lucide-react";
+import { AuthShell } from "@/components/auth/AuthShell";
+import { StepIndicator } from "@/components/auth/StepIndicator";
+import { OtpInput } from "@/components/auth/OtpInput";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+const ACCENT = "var(--color-auth-admin)";
+const ACCENT_DARK = "var(--color-auth-admin-dark)";
+const RESEND_COOLDOWN_SECONDS = 30;
 
 interface Institution {
   id: string;
@@ -12,214 +25,273 @@ interface Institution {
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const identifierId = useId();
+  const errorId = useId();
+
   const [step, setStep] = useState<1 | 2>(1);
   const [institutions, setInstitutions] = useState<Institution[]>([]);
+  const [institutionsLoading, setInstitutionsLoading] = useState(true);
+  const [institutionsError, setInstitutionsError] = useState("");
   const [selectedInstitution, setSelectedInstitution] = useState<Institution | null>(null);
   const [identifier, setIdentifier] = useState("");
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  const identifierRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    let cancelled = false;
     fetch("/api/institutions")
       .then((r) => r.json())
-      .then((d) => setInstitutions(d.institutions ?? []));
+      .then((d) => {
+        if (cancelled) return;
+        setInstitutions(d.institutions ?? []);
+        setInstitutionsLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setInstitutionsError("Couldn't load institutions. Refresh to try again.");
+        setInstitutionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  async function handleRequestOtp(e: React.FormEvent) {
-    e.preventDefault();
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
+  async function requestOtp() {
     if (!selectedInstitution) {
       setError("Please select an institution.");
       return;
     }
     setLoading(true);
     setError("");
-    const res = await fetch("/api/institution/auth/request-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tenantSlug: selectedInstitution.slug, identifier }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      setError(data.error ?? "Failed to send OTP.");
-      return;
+    try {
+      const res = await fetch("/api/institution/auth/request-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantSlug: selectedInstitution.slug, identifier }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Failed to send OTP.");
+        return;
+      }
+      setStep(2);
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+    } catch {
+      setError("Network error. Check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
-    setOtpSent(true);
-    setStep(2);
+  }
+
+  async function handleRequestOtp(e: React.FormEvent) {
+    e.preventDefault();
+    await requestOtp();
+  }
+
+  async function handleResend() {
+    if (resendCooldown > 0 || loading) return;
+    await requestOtp();
   }
 
   async function handleVerifyOtp(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const res = await fetch("/api/institution/auth/verify-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tenantSlug: selectedInstitution!.slug, identifier, otp }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      setError(data.error ?? "Invalid OTP.");
-      return;
+    try {
+      const res = await fetch("/api/institution/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantSlug: selectedInstitution!.slug, identifier, otp }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Invalid OTP.");
+        return;
+      }
+      router.push("/admin");
+    } catch {
+      setError("Network error. Check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
-    router.push("/admin");
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left panel */}
-      <div className="hidden lg:flex lg:w-1/2 bg-indigo-950 flex-col justify-between p-12">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-indigo-500 rounded-lg flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-          </div>
-          <span className="text-white font-semibold text-lg">UniChat</span>
-        </div>
+    <AuthShell
+      accent={ACCENT}
+      accentDark={ACCENT_DARK}
+      eyebrow="Institution Console"
+      headline={
+        <>
+          Institution
+          <br />
+          Admin Portal
+        </>
+      }
+      tagline="Manage your institution's users, departments, clubs, and branding — all in one place."
+      features={["Secure OTP login", "Tenant-scoped access", "Role-protected"]}
+      footer={
+        <p className="text-muted-foreground text-xs">
+          SuperAdmin?{" "}
+          <a href="/login" className="font-medium hover:underline" style={{ color: ACCENT }}>
+            Sign in here
+          </a>
+          {" · "}
+          Teacher?{" "}
+          <a href="/teacher-login" className="font-medium hover:underline" style={{ color: ACCENT }}>
+            Sign in here
+          </a>
+        </p>
+      }
+    >
+      <StepIndicator step={step} total={2} accent={ACCENT} />
 
-        <div>
-          <h1 className="text-4xl font-bold text-white leading-tight">
-            Institution<br />Admin Portal
-          </h1>
-          <p className="text-indigo-300 mt-4 text-lg">
-            Manage your institution's users, departments, clubs, and branding — all in one place.
-          </p>
-        </div>
+      {step === 1 ? (
+        <div key="step-1" className="animate-fade-up">
+          <h2 className="text-heading">Sign in</h2>
+          <p className="text-subtitle mt-1 mb-6">Select your institution and enter your email or phone.</p>
 
-        <div className="flex items-center gap-4 text-indigo-400 text-sm">
-          <span>Secure OTP login</span>
-          <span>·</span>
-          <span>Tenant-scoped access</span>
-          <span>·</span>
-          <span>Role-protected</span>
-        </div>
-      </div>
-
-      {/* Right panel */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-indigo-50">
-        <div className="w-full max-w-md">
-          {/* Logo for mobile */}
-          <div className="flex items-center gap-3 mb-8 lg:hidden">
-            <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
+          <form onSubmit={handleRequestOtp} className="space-y-4" noValidate>
+            <div>
+              <Label className="mb-1.5">Institution</Label>
+              <Select
+                value={selectedInstitution?.id ?? ""}
+                onValueChange={(val) => {
+                  const inst = institutions.find((i) => i.id === val) ?? null;
+                  setSelectedInstitution(inst);
+                }}
+                disabled={institutionsLoading}
+              >
+                <SelectTrigger className="w-full h-11">
+                  <SelectValue placeholder={institutionsLoading ? "Loading institutions…" : "Select institution…"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {institutions.map((inst) => (
+                    <SelectItem key={inst.id} value={inst.id}>
+                      {inst.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <span className="font-semibold text-lg text-indigo-950">UniChat</span>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-indigo-100 p-8">
-            {/* Step indicator */}
-            <div className="flex items-center gap-2 mb-6">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${step >= 1 ? "bg-indigo-600 text-white" : "bg-indigo-100 text-indigo-400"}`}>1</div>
-              <div className={`flex-1 h-0.5 ${step >= 2 ? "bg-indigo-600" : "bg-indigo-100"}`} />
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${step >= 2 ? "bg-indigo-600 text-white" : "bg-indigo-100 text-indigo-400"}`}>2</div>
-            </div>
-
-            {step === 1 ? (
-              <>
-                <h2 className="text-2xl font-bold text-gray-900">Sign in</h2>
-                <p className="text-gray-500 text-sm mt-1 mb-6">Select your institution and enter your email or phone.</p>
-
-                <form onSubmit={handleRequestOtp} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Institution</label>
-                    <select
-                      value={selectedInstitution?.id ?? ""}
-                      onChange={(e) => {
-                        const inst = institutions.find((i) => i.id === e.target.value) ?? null;
-                        setSelectedInstitution(inst);
-                      }}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                      required
-                    >
-                      <option value="">Select institution…</option>
-                      {institutions.map((inst) => (
-                        <option key={inst.id} value={inst.id}>{inst.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email or Phone</label>
-                    <input
-                      type="text"
-                      value={identifier}
-                      onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="admin@institution.edu"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      required
-                    />
-                  </div>
-
-                  {error && <p className="text-red-600 text-sm">{error}</p>}
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60"
-                  >
-                    {loading ? "Sending OTP…" : "Send OTP"}
-                  </button>
-                </form>
-              </>
-            ) : (
-              <>
-                <h2 className="text-2xl font-bold text-gray-900">Enter OTP</h2>
-                <p className="text-gray-500 text-sm mt-1 mb-6">
-                  Check your auth-service logs for the OTP sent to{" "}
-                  <span className="font-medium text-gray-700">{identifier}</span>.
-                </p>
-
-                <form onSubmit={handleVerifyOtp} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">One-Time Password</label>
-                    <input
-                      type="text"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                      placeholder="6-digit code"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm tracking-widest text-center font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      maxLength={6}
-                      required
-                    />
-                  </div>
-
-                  {error && <p className="text-red-600 text-sm">{error}</p>}
-
-                  <button
-                    type="submit"
-                    disabled={loading || otp.length !== 6}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60"
-                  >
-                    {loading ? "Verifying…" : "Sign in"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => { setStep(1); setOtp(""); setError(""); }}
-                    className="w-full text-indigo-600 hover:text-indigo-800 text-sm font-medium py-1"
-                  >
-                    ← Back
-                  </button>
-                </form>
-              </>
+            {institutionsError && (
+              <Alert variant="destructive">
+                <AlertCircle />
+                <AlertDescription>{institutionsError}</AlertDescription>
+              </Alert>
             )}
-          </div>
 
-          <p className="text-center text-indigo-400 text-xs mt-6">
-            SuperAdmin?{" "}
-            <a href="/login" className="text-indigo-600 hover:underline font-medium">Sign in here</a>
-            {" · "}
-            Teacher?{" "}
-            <a href="/teacher-login" className="text-indigo-600 hover:underline font-medium">Sign in here</a>
-          </p>
+            <div>
+              <Label htmlFor={identifierId} className="mb-1.5">
+                Email or Phone
+              </Label>
+              <Input
+                ref={identifierRef}
+                id={identifierId}
+                className="h-11"
+                type="text"
+                inputMode="email"
+                autoComplete="username"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="admin@institution.edu"
+                aria-describedby={error ? errorId : undefined}
+                required
+              />
+            </div>
+
+            {error && (
+              <Alert id={errorId} variant="destructive" className="animate-fade-up">
+                <AlertCircle />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full h-11"
+              style={{ backgroundColor: ACCENT }}
+            >
+              {loading && <Loader2 className="animate-spin" />}
+              {loading ? "Sending OTP…" : "Send OTP"}
+            </Button>
+          </form>
         </div>
-      </div>
-    </div>
+      ) : (
+        <div key="step-2" className="animate-fade-up">
+          <h2 className="text-heading">Enter OTP</h2>
+          <p className="text-subtitle mt-1 mb-6">
+            Check your auth-service logs for the code sent to{" "}
+            <span className="font-medium text-foreground">{identifier}</span>.
+          </p>
+
+          <form onSubmit={handleVerifyOtp} className="space-y-4" noValidate>
+            <div>
+              <Label className="mb-1.5">One-Time Password</Label>
+              <OtpInput
+                value={otp}
+                onChange={setOtp}
+                disabled={loading}
+                accent={ACCENT}
+                errorId={error ? errorId : undefined}
+              />
+            </div>
+
+            {error && (
+              <Alert id={errorId} variant="destructive" className="animate-fade-up">
+                <AlertCircle />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button
+              type="submit"
+              disabled={loading || otp.length !== 6}
+              className="w-full h-11"
+              style={{ backgroundColor: ACCENT }}
+            >
+              {loading && <Loader2 className="animate-spin" />}
+              {loading ? "Verifying…" : "Sign in"}
+            </Button>
+
+            <div className="flex items-center justify-between pt-1">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setStep(1);
+                  setOtp("");
+                  setError("");
+                }}
+              >
+                <ChevronLeft />
+                Back
+              </Button>
+
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendCooldown > 0 || loading}
+                className="text-sm font-medium disabled:text-muted-foreground disabled:cursor-not-allowed hover:underline"
+                style={{ color: resendCooldown > 0 || loading ? undefined : ACCENT }}
+              >
+                {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend code"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </AuthShell>
   );
 }

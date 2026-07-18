@@ -1,6 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Plus, Pencil, Trash2, Search, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 interface Department {
   id: string;
@@ -47,7 +63,7 @@ interface User {
 }
 
 const ROLE_TABS = ["all", "student", "teacher", "admin"] as const;
-type RoleTab = typeof ROLE_TABS[number];
+type RoleTab = (typeof ROLE_TABS)[number];
 
 // Display label for a role value (handles legacy "staff" from DB)
 function roleLabel(role: string) {
@@ -55,6 +71,20 @@ function roleLabel(role: string) {
   if (role === "admin") return "Admin";
   if (role === "class_rep") return "Class Rep";
   return "Student";
+}
+
+const ROLE_BADGE_CLASS: Record<string, string> = {
+  student: "bg-[var(--info)]/10 text-[var(--info)]",
+  teacher: "bg-[var(--chart-3)]/10 text-[var(--chart-3)]",
+  staff: "bg-[var(--chart-3)]/10 text-[var(--chart-3)]",
+  admin: "bg-primary/10 text-primary",
+  class_rep: "bg-[var(--warning)]/10 text-[var(--warning)]",
+};
+
+const SENTINEL_NONE = "__none__";
+
+function fromSelectValue(v: string | null): string {
+  return v === SENTINEL_NONE || v == null ? "" : v;
 }
 
 interface AddModalProps {
@@ -86,91 +116,92 @@ function AddModal({ departments, onClose, onCreated }: AddModalProps) {
     });
     const data = await res.json();
     setSaving(false);
-    if (!res.ok) { setError(data.error ?? "Failed to create user."); return; }
+    if (!res.ok) {
+      setError(data.error ?? "Failed to create user.");
+      return;
+    }
     onCreated();
     onClose();
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Add User</h3>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Add User</DialogTitle>
+        </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-            <input
-              type="text"
-              value={form.fullName}
-              onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              required
-            />
+            <Label className="mb-1.5">Full Name</Label>
+            <Input value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} required />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+            <Label className="mb-1.5">Email</Label>
+            <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-            <input
+            <Label className="mb-1.5">Phone</Label>
+            <Input
               type="tel"
               value={form.phone}
               onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
               placeholder="255XXXXXXXXX"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Student / Staff ID</label>
-            <input
-              type="text"
+            <Label className="mb-1.5">Student / Staff ID</Label>
+            <Input
               value={form.studentId}
               onChange={(e) => setForm((f) => ({ ...f, studentId: e.target.value }))}
               placeholder="e.g. STU001 or TCH042"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-            <select
-              value={form.role}
-              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as "student" | "teacher" }))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-            >
-              <option value="student">Student</option>
-              <option value="teacher">Teacher</option>
-            </select>
+            <Label className="mb-1.5">Role</Label>
+            <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v as "student" | "teacher" }))}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="student">Student</SelectItem>
+                <SelectItem value="teacher">Teacher</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           {form.role === "teacher" && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-              <select
-                value={form.departmentId}
-                onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value }))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              <Label className="mb-1.5">Department</Label>
+              <Select
+                value={form.departmentId || SENTINEL_NONE}
+                onValueChange={(v) => setForm((f) => ({ ...f, departmentId: fromSelectValue(v) }))}
               >
-                <option value="">No department yet</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SENTINEL_NONE}>No department yet</SelectItem>
+                  {departments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
-          {error && <p className="text-red-600 text-sm">{error}</p>}
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-            <button type="submit" disabled={saving} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-60">
+          {error && <p className="text-destructive text-sm">{error}</p>}
+          <DialogFooter className="-mx-0 -mb-0 border-t-0 bg-transparent p-0 pt-2">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving} className="flex-1">
+              {saving && <Loader2 className="animate-spin" />}
               {saving ? "Creating…" : "Add User"}
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -209,134 +240,128 @@ function EditModal({ user, departments, courses, onClose, onSaved }: EditModalPr
     });
     const data = await res.json();
     setSaving(false);
-    if (!res.ok) { setError(data.error ?? "Failed to save."); return; }
+    if (!res.ok) {
+      setError(data.error ?? "Failed to save.");
+      return;
+    }
     onSaved();
     onClose();
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-        <h3 className="text-lg font-bold text-gray-900 mb-1">Edit User</h3>
-        <p className="text-sm text-gray-500 mb-4">{roleLabel(user.role)}</p>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit User</DialogTitle>
+          <DialogDescription>{roleLabel(user.role)}</DialogDescription>
+        </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-            <input
-              type="text"
-              value={form.fullName}
-              onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              required
-            />
+            <Label className="mb-1.5">Full Name</Label>
+            <Input value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} required />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+            <Label className="mb-1.5">Email</Label>
+            <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-            <input
+            <Label className="mb-1.5">Phone</Label>
+            <Input
               type="tel"
               value={form.phone}
               onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
               placeholder="255XXXXXXXXX"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Student ID</label>
-            <input
-              type="text"
-              value={form.studentId}
-              onChange={(e) => setForm((f) => ({ ...f, studentId: e.target.value }))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+            <Label className="mb-1.5">Student ID</Label>
+            <Input value={form.studentId} onChange={(e) => setForm((f) => ({ ...f, studentId: e.target.value }))} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Staff ID</label>
-            <input
-              type="text"
-              value={form.staffId}
-              onChange={(e) => setForm((f) => ({ ...f, staffId: e.target.value }))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+            <Label className="mb-1.5">Staff ID</Label>
+            <Input value={form.staffId} onChange={(e) => setForm((f) => ({ ...f, staffId: e.target.value }))} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {isTeacher ? "Programme Taught" : "Programme / Course"}
-            </label>
-            <select
-              value={form.course}
-              onChange={(e) => setForm((f) => ({ ...f, course: e.target.value, ntaLevel: "" }))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            <Label className="mb-1.5">{isTeacher ? "Programme Taught" : "Programme / Course"}</Label>
+            <Select
+              value={form.course || SENTINEL_NONE}
+              onValueChange={(v) => setForm((f) => ({ ...f, course: fromSelectValue(v), ntaLevel: "" }))}
             >
-              <option value="">No programme</option>
-              {form.course && !courses.some((c) => c.name === form.course) && (
-                <option value={form.course}>{form.course} (custom)</option>
-              )}
-              {courses.map((c) => (
-                <option key={c.id} value={c.name}>{c.name} — {c.department.name}</option>
-              ))}
-            </select>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SENTINEL_NONE}>No programme</SelectItem>
+                {form.course && !courses.some((c) => c.name === form.course) && (
+                  <SelectItem value={form.course}>{form.course} (custom)</SelectItem>
+                )}
+                {courses.map((c) => (
+                  <SelectItem key={c.id} value={c.name}>
+                    {c.name} — {c.department.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">NTA Level</label>
-            <select
-              value={form.ntaLevel}
-              onChange={(e) => setForm((f) => ({ ...f, ntaLevel: e.target.value }))}
+            <Label className="mb-1.5">NTA Level</Label>
+            <Select
+              value={form.ntaLevel || SENTINEL_NONE}
+              onValueChange={(v) => setForm((f) => ({ ...f, ntaLevel: fromSelectValue(v) }))}
               disabled={!form.course}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
             >
-              <option value="">{form.course ? "No level" : "Pick a programme first"}</option>
-              {form.ntaLevel && !availableLevels.includes(form.ntaLevel) && (
-                <option value={form.ntaLevel}>{form.ntaLevel} (custom)</option>
-              )}
-              {availableLevels.map((lvl) => (
-                <option key={lvl} value={lvl}>{lvl}</option>
-              ))}
-            </select>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={form.course ? "No level" : "Pick a programme first"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SENTINEL_NONE}>{form.course ? "No level" : "Pick a programme first"}</SelectItem>
+                {form.ntaLevel && !availableLevels.includes(form.ntaLevel) && (
+                  <SelectItem value={form.ntaLevel}>{form.ntaLevel} (custom)</SelectItem>
+                )}
+                {availableLevels.map((lvl) => (
+                  <SelectItem key={lvl} value={lvl}>
+                    {lvl}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           {isTeacher && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-              <select
-                value={form.departmentId}
-                onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value }))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              <Label className="mb-1.5">Department</Label>
+              <Select
+                value={form.departmentId || SENTINEL_NONE}
+                onValueChange={(v) => setForm((f) => ({ ...f, departmentId: fromSelectValue(v) }))}
               >
-                <option value="">No department</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SENTINEL_NONE}>No department</SelectItem>
+                  {departments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
-          {error && <p className="text-red-600 text-sm">{error}</p>}
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-            <button type="submit" disabled={saving} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-60">
+          {error && <p className="text-destructive text-sm">{error}</p>}
+          <DialogFooter className="-mx-0 -mb-0 border-t-0 bg-transparent p-0 pt-2">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving} className="flex-1">
+              {saving && <Loader2 className="animate-spin" />}
               {saving ? "Saving…" : "Save Changes"}
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-const ROLE_BADGE: Record<string, string> = {
-  student: "bg-blue-100 text-blue-700",
-  teacher: "bg-violet-100 text-violet-700",
-  staff: "bg-violet-100 text-violet-700",
-  admin: "bg-indigo-100 text-indigo-700",
-  class_rep: "bg-amber-100 text-amber-700",
-};
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -364,7 +389,9 @@ export default function UsersPage() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   async function toggleActive(user: User) {
     await fetch(`/api/institution/users/${user.id}`, {
@@ -427,170 +454,166 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Users</h2>
-          <p className="text-gray-500 text-sm">{users.length} total</p>
+          <h2 className="text-heading">Users</h2>
+          <p className="text-subtitle">{users.length} total</p>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+        <Button onClick={() => setShowAdd(true)}>
+          <Plus />
           Add User
-        </button>
+        </Button>
       </div>
 
-      {/* Tabs + search */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="flex gap-1 bg-white border border-indigo-100 rounded-lg p-1">
-          {ROLE_TABS.map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium capitalize transition-colors ${tab === t ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-indigo-50"}`}
-            >
-              {t === "teacher" ? "Teachers" : t === "student" ? "Students" : t === "admin" ? "Admins" : "All"}
-            </button>
-          ))}
+      <div className="flex items-center gap-3 flex-wrap">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as RoleTab)}>
+          <TabsList>
+            {ROLE_TABS.map((t) => (
+              <TabsTrigger key={t} value={t}>
+                {t === "teacher" ? "Teachers" : t === "student" ? "Students" : t === "admin" ? "Admins" : "All"}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        <div className="relative flex-1 min-w-48">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, email or ID…"
+            className="pl-8"
+          />
         </div>
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search name, email or ID…"
-          className="flex-1 min-w-48 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
       </div>
 
-      {/* Table */}
-      <div className="bg-white border border-indigo-100 rounded-xl overflow-hidden">
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-32">
-            <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+            <Loader2 className="w-5 h-5 text-primary animate-spin" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-12 text-gray-400 text-sm">No users found.</div>
+          <div className="text-center py-12 text-muted-foreground text-sm">No users found.</div>
         ) : (
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-indigo-50 border-b border-indigo-100">
-              <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Name</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide hidden md:table-cell">Contact / ID</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Role</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide hidden lg:table-cell">Department</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide hidden xl:table-cell">Programme</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide hidden xl:table-cell">NTA Level</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Status</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-indigo-50">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="text-table-header px-4">Name</TableHead>
+                <TableHead className="text-table-header px-4 hidden md:table-cell">Contact / ID</TableHead>
+                <TableHead className="text-table-header px-4">Role</TableHead>
+                <TableHead className="text-table-header px-4 hidden lg:table-cell">Department</TableHead>
+                <TableHead className="text-table-header px-4 hidden xl:table-cell">Programme</TableHead>
+                <TableHead className="text-table-header px-4 hidden xl:table-cell">NTA Level</TableHead>
+                <TableHead className="text-table-header px-4">Status</TableHead>
+                <TableHead className="px-4" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filtered.map((u) => (
-                <tr key={u.id} className="hover:bg-indigo-50/50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-900">{u.fullName}</td>
-                  <td className="px-4 py-3 text-gray-500 hidden md:table-cell">
+                <TableRow key={u.id}>
+                  <TableCell className="px-4 py-3 text-table-cell font-medium">{u.fullName}</TableCell>
+                  <TableCell className="px-4 py-3 text-table-cell text-muted-foreground hidden md:table-cell">
                     {u.email || u.studentId || "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_BADGE[u.role] ?? "bg-gray-100 text-gray-600"}`}>
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <Badge className={ROLE_BADGE_CLASS[u.role] ?? "bg-muted text-muted-foreground"}>
                       {roleLabel(u.role)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 hidden lg:table-cell">
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-4 py-3 hidden lg:table-cell">
                     {u.role === "teacher" || u.role === "staff" ? (
                       <select
                         value={u.department?.id ?? ""}
                         onChange={(e) => assignDepartment(u, e.target.value)}
-                        className="border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                        className="border border-input rounded-md px-2 py-1 text-xs text-foreground bg-transparent outline-none focus:border-primary"
                       >
                         <option value="">Unassigned</option>
                         {departments.map((d) => (
-                          <option key={d.id} value={d.id}>{d.name}</option>
+                          <option key={d.id} value={d.id}>
+                            {d.name}
+                          </option>
                         ))}
                       </select>
                     ) : (
-                      <span className="text-gray-400">—</span>
+                      <span className="text-muted-foreground">—</span>
                     )}
-                  </td>
-                  <td className="px-4 py-3 hidden xl:table-cell">
+                  </TableCell>
+                  <TableCell className="px-4 py-3 hidden xl:table-cell">
                     {u.role !== "admin" ? (
                       <select
                         value={u.course ?? ""}
                         onChange={(e) => assignProgramme(u, e.target.value)}
-                        className="border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white max-w-[180px]"
+                        className="border border-input rounded-md px-2 py-1 text-xs text-foreground bg-transparent outline-none focus:border-primary max-w-[180px]"
                       >
                         <option value="">No programme</option>
                         {u.course && !courses.some((c) => c.name === u.course) && (
                           <option value={u.course}>{u.course} (custom)</option>
                         )}
                         {courses.map((c) => (
-                          <option key={c.id} value={c.name}>{c.name}</option>
+                          <option key={c.id} value={c.name}>
+                            {c.name}
+                          </option>
                         ))}
                       </select>
                     ) : (
-                      <span className="text-gray-400">—</span>
+                      <span className="text-muted-foreground">—</span>
                     )}
-                  </td>
-                  <td className="px-4 py-3 hidden xl:table-cell">
+                  </TableCell>
+                  <TableCell className="px-4 py-3 hidden xl:table-cell">
                     {u.role !== "admin" ? (
                       <select
                         value={u.ntaLevel ?? ""}
                         onChange={(e) => assignNtaLevel(u, e.target.value)}
                         disabled={!u.course}
-                        className="border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
+                        className="border border-input rounded-md px-2 py-1 text-xs text-foreground bg-transparent outline-none focus:border-primary disabled:opacity-50"
                       >
                         <option value="">{u.course ? "No level" : "—"}</option>
                         {u.ntaLevel && !levelsForProgramme(u.course ?? "").includes(u.ntaLevel) && (
                           <option value={u.ntaLevel}>{u.ntaLevel} (custom)</option>
                         )}
                         {levelsForProgramme(u.course ?? "").map((lvl) => (
-                          <option key={lvl} value={lvl}>{lvl}</option>
+                          <option key={lvl} value={lvl}>
+                            {lvl}
+                          </option>
                         ))}
                       </select>
                     ) : (
-                      <span className="text-gray-400">—</span>
+                      <span className="text-muted-foreground">—</span>
                     )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => toggleActive(u)}
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${u.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}
-                    >
-                      {u.isActive ? "Active" : "Inactive"}
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <button onClick={() => toggleActive(u)}>
+                      <Badge
+                        className={
+                          u.isActive
+                            ? "bg-[var(--success)]/10 text-[var(--success)] cursor-pointer"
+                            : "bg-destructive/10 text-destructive cursor-pointer"
+                        }
+                      >
+                        {u.isActive ? "Active" : "Inactive"}
+                      </Badge>
                     </button>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => setEditing(u)}
-                        className="text-gray-400 hover:text-indigo-600 transition-colors p-1"
-                        title="Edit user"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-0.5">
+                      <Button variant="ghost" size="icon-sm" onClick={() => setEditing(u)} title="Edit user">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => deleteUser(u.id)}
-                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
                         title="Remove user"
+                        className="hover:text-destructive"
                       >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-          </div>
+            </TableBody>
+          </Table>
         )}
       </div>
 

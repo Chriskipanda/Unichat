@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 interface Department {
   id: string;
@@ -44,54 +50,61 @@ function AddCourseModal({
     });
     const data = await res.json();
     setSaving(false);
-    if (!res.ok) { setError(data.error ?? "Failed."); return; }
+    if (!res.ok) {
+      setError(data.error ?? "Failed.");
+      return;
+    }
     onCreated();
     onClose();
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Add Course</h3>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add Course</DialogTitle>
+        </DialogHeader>
         {departments.length === 0 ? (
-          <p className="text-sm text-gray-500 mb-4">
-            Add a department first — courses belong to a department.
-          </p>
+          <>
+            <p className="text-sm text-muted-foreground">Add a department first — courses belong to a department.</p>
+            <Button variant="outline" onClick={onClose} className="w-full">
+              Close
+            </Button>
+          </>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <input
-              type="text"
+            <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Course name, e.g. Bachelor Degree in Computer Science"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               required
             />
-            <select
-              value={departmentId}
-              onChange={(e) => setDepartmentId(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-              required
-            >
-              <option value="">Select department…</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
-            {error && <p className="text-red-600 text-sm">{error}</p>}
-            <div className="flex gap-3">
-              <button type="button" onClick={onClose} className="flex-1 border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-              <button type="submit" disabled={saving} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-60">
+            <Select value={departmentId} onValueChange={(v) => setDepartmentId(v ?? "")}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select department…" />
+              </SelectTrigger>
+              <SelectContent>
+                {departments.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {error && <p className="text-destructive text-sm">{error}</p>}
+            <DialogFooter className="-mx-0 -mb-0 border-t-0 bg-transparent p-0">
+              <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving || !departmentId} className="flex-1">
+                {saving && <Loader2 className="animate-spin" />}
                 {saving ? "Adding…" : "Add"}
-              </button>
-            </div>
+              </Button>
+            </DialogFooter>
           </form>
         )}
-        {departments.length === 0 && (
-          <button onClick={onClose} className="w-full border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">Close</button>
-        )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -103,10 +116,7 @@ export default function CoursesPage() {
 
   async function load() {
     setLoading(true);
-    const [coursesRes, deptRes] = await Promise.all([
-      fetch("/api/institution/courses"),
-      fetch("/api/institution/departments"),
-    ]);
+    const [coursesRes, deptRes] = await Promise.all([fetch("/api/institution/courses"), fetch("/api/institution/departments")]);
     const coursesData = await coursesRes.json();
     const deptData = await deptRes.json();
     setCourses(coursesData.courses ?? []);
@@ -115,7 +125,9 @@ export default function CoursesPage() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   async function deleteCourse(id: string) {
     if (!confirm("Delete this course? Teachers with an assignment for it will keep it, but new assignments can't reference it.")) return;
@@ -127,45 +139,38 @@ export default function CoursesPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Courses</h2>
-          <p className="text-gray-500 text-sm">Catalog teachers pick from when registering what they teach</p>
+          <h2 className="text-heading">Courses</h2>
+          <p className="text-subtitle">Catalog teachers pick from when registering what they teach</p>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+        <Button onClick={() => setShowAdd(true)}>
+          <Plus />
           Add Course
-        </button>
+        </Button>
       </div>
 
-      <div className="bg-white border border-indigo-100 rounded-xl overflow-hidden">
+      <Card className="p-0 overflow-hidden gap-0">
         {loading ? (
           <div className="flex items-center justify-center h-32">
-            <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+            <Loader2 className="w-5 h-5 text-primary animate-spin" />
           </div>
         ) : courses.length === 0 ? (
-          <div className="text-center py-12 text-gray-400 text-sm">No courses yet. Add your first course to get started.</div>
+          <div className="text-center py-12 text-muted-foreground text-sm">No courses yet. Add your first course to get started.</div>
         ) : (
-          <div className="divide-y divide-indigo-50">
+          <div className="divide-y divide-border">
             {courses.map((c) => (
-              <div key={c.id} className="flex items-center justify-between px-5 py-3.5">
+              <div key={c.id} className="flex items-center justify-between px-5 py-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{c.name}</p>
-                  <p className="text-xs text-gray-500">{c.department.name}</p>
+                  <p className="text-sm font-medium text-foreground">{c.name}</p>
+                  <p className="text-metadata">{c.department.name}</p>
                 </div>
-                <button onClick={() => deleteCourse(c.id)} className="text-gray-400 hover:text-red-500 p-1 rounded">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                <Button variant="ghost" size="icon-sm" className="hover:text-destructive" onClick={() => deleteCourse(c.id)}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </Card>
 
       {showAdd && <AddCourseModal departments={departments} onClose={() => setShowAdd(false)} onCreated={load} />}
     </div>

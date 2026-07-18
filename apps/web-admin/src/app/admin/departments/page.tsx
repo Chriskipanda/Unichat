@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Plus, Upload, Building2, Trash2, X, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 interface Department {
   id: string;
@@ -34,34 +40,35 @@ function AddFacultyModal({ onClose, onCreated }: AddFacultyModalProps) {
     });
     const data = await res.json();
     setSaving(false);
-    if (!res.ok) { setError(data.error ?? "Failed."); return; }
+    if (!res.ok) {
+      setError(data.error ?? "Failed.");
+      return;
+    }
     onCreated();
     onClose();
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Add Faculty / School</h3>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add Faculty / School</DialogTitle>
+        </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Faculty name"
-            className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            required
-          />
-          {error && <p className="text-red-600 text-sm">{error}</p>}
-          <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="flex-1 border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-            <button type="submit" disabled={saving} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-60">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Faculty name" required />
+          {error && <p className="text-destructive text-sm">{error}</p>}
+          <DialogFooter className="-mx-0 -mb-0 border-t-0 bg-transparent p-0">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving} className="flex-1">
+              {saving && <Loader2 className="animate-spin" />}
               {saving ? "Adding…" : "Add"}
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -88,35 +95,36 @@ function AddDeptModal({ facultyId, facultyName, onClose, onCreated }: AddDeptMod
     });
     const data = await res.json();
     setSaving(false);
-    if (!res.ok) { setError(data.error ?? "Failed."); return; }
+    if (!res.ok) {
+      setError(data.error ?? "Failed.");
+      return;
+    }
     onCreated();
     onClose();
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-1">Add Department</h3>
-        <p className="text-sm text-gray-500 mb-4">Under {facultyName}</p>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add Department</DialogTitle>
+          <DialogDescription>Under {facultyName}</DialogDescription>
+        </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Department name"
-            className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            required
-          />
-          {error && <p className="text-red-600 text-sm">{error}</p>}
-          <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="flex-1 border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-            <button type="submit" disabled={saving} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-60">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Department name" required />
+          {error && <p className="text-destructive text-sm">{error}</p>}
+          <DialogFooter className="-mx-0 -mb-0 border-t-0 bg-transparent p-0">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving} className="flex-1">
+              {saving && <Loader2 className="animate-spin" />}
               {saving ? "Adding…" : "Add"}
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -158,55 +166,68 @@ function BulkImportModal({ onClose, onImported }: { onClose: () => void; onImpor
     });
     const data = await res.json();
     setSaving(false);
-    if (!res.ok) { setError(data.error ?? "Import failed."); return; }
+    if (!res.ok) {
+      setError(data.error ?? "Import failed.");
+      return;
+    }
     setResult(data);
     onImported();
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-        <h3 className="text-lg font-bold text-gray-900 mb-1">Bulk Import</h3>
-        <p className="text-sm text-gray-500 mb-4">
-          One row per line: <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">Faculty | Department | Programme 1; Programme 2</code>.
-          Existing faculties/departments/programmes are matched by name and skipped — safe to paste the same list twice.
-        </p>
-        <textarea
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Bulk Import</DialogTitle>
+          <DialogDescription>
+            One row per line:{" "}
+            <code className="bg-muted px-1 py-0.5 rounded text-xs">Faculty | Department | Programme 1; Programme 2</code>.
+            Existing faculties/departments/programmes are matched by name and skipped — safe to paste the same list twice.
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={10}
-          placeholder={"Faculty of Computing and Information Technology | Department of Computer Science | Ordinary Diploma in Computer Science; Bachelor Degree in Computer Science\nFaculty of Computing and Information Technology | Department of Information Technology | Ordinary Diploma in Information Technology; Bachelor Degree in Information Technology"}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          placeholder={
+            "Faculty of Computing and Information Technology | Department of Computer Science | Ordinary Diploma in Computer Science; Bachelor Degree in Computer Science\nFaculty of Computing and Information Technology | Department of Information Technology | Ordinary Diploma in Information Technology; Bachelor Degree in Information Technology"
+          }
+          className="font-mono text-xs"
         />
-        {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+        {error && <p className="text-destructive text-sm">{error}</p>}
         {result && (
-          <div className="mt-4 bg-indigo-50 border border-indigo-100 rounded-lg p-4 text-sm space-y-1">
-            <p className="font-medium text-gray-900">Import complete</p>
-            <p className="text-gray-600">Faculties created: {result.facultiesCreated}</p>
-            <p className="text-gray-600">Departments created: {result.departmentsCreated}</p>
-            <p className="text-gray-600">Programmes created: {result.programmesCreated} (skipped {result.programmesSkipped} already present)</p>
+          <div className="bg-primary/5 border border-primary/10 rounded-lg p-4 text-sm space-y-1">
+            <p className="font-medium text-foreground">Import complete</p>
+            <p className="text-muted-foreground">Faculties created: {result.facultiesCreated}</p>
+            <p className="text-muted-foreground">Departments created: {result.departmentsCreated}</p>
+            <p className="text-muted-foreground">
+              Programmes created: {result.programmesCreated} (skipped {result.programmesSkipped} already present)
+            </p>
             {result.errors.length > 0 && (
               <div className="pt-2">
-                <p className="text-red-600 font-medium">{result.errors.length} row(s) had problems:</p>
-                <ul className="list-disc list-inside text-red-500 text-xs">
-                  {result.errors.map((e, i) => <li key={i}>{e}</li>)}
+                <p className="text-destructive font-medium">{result.errors.length} row(s) had problems:</p>
+                <ul className="list-disc list-inside text-destructive/80 text-xs">
+                  {result.errors.map((e, i) => (
+                    <li key={i}>{e}</li>
+                  ))}
                 </ul>
               </div>
             )}
           </div>
         )}
-        <div className="flex gap-3 pt-4">
-          <button type="button" onClick={onClose} className="flex-1 border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">
+        <DialogFooter className="-mx-0 -mb-0 border-t-0 bg-transparent p-0">
+          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
             {result ? "Close" : "Cancel"}
-          </button>
+          </Button>
           {!result && (
-            <button type="button" onClick={handleImport} disabled={saving} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-60">
+            <Button type="button" onClick={handleImport} disabled={saving} className="flex-1">
+              {saving && <Loader2 className="animate-spin" />}
               {saving ? "Importing…" : "Import"}
-            </button>
+            </Button>
           )}
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -225,7 +246,9 @@ export default function DepartmentsPage() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   async function deleteFaculty(id: string) {
     if (!confirm("Delete this faculty and all its departments?")) return;
@@ -241,102 +264,80 @@ export default function DepartmentsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Departments</h2>
-          <p className="text-gray-500 text-sm">Manage faculties and departments</p>
+          <h2 className="text-heading">Departments</h2>
+          <p className="text-subtitle">Manage faculties and departments</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowBulkImport(true)}
-            className="flex items-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M7 10l5 5 5-5M12 15V3" />
-            </svg>
+          <Button variant="outline" onClick={() => setShowBulkImport(true)}>
+            <Upload />
             Bulk Import
-          </button>
-          <button
-            onClick={() => setShowAddFaculty(true)}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+          </Button>
+          <Button onClick={() => setShowAddFaculty(true)}>
+            <Plus />
             Add Faculty
-          </button>
+          </Button>
         </div>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center h-32">
-          <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <Loader2 className="w-5 h-5 text-primary animate-spin" />
         </div>
       ) : faculties.length === 0 ? (
-        <div className="bg-white border border-indigo-100 rounded-xl p-12 text-center text-gray-400 text-sm">
+        <Card className="p-12 text-center text-muted-foreground text-sm">
           No faculties yet. Add your first faculty to get started.
-        </div>
+        </Card>
       ) : (
         <div className="space-y-4">
           {faculties.map((faculty) => (
-            <div key={faculty.id} className="bg-white border border-indigo-100 rounded-xl overflow-hidden">
-              {/* Faculty header */}
-              <div className="flex items-center justify-between px-5 py-4 bg-indigo-50 border-b border-indigo-100">
+            <Card key={faculty.id} className="p-0 overflow-hidden gap-0">
+              <div className="flex items-center justify-between px-5 py-4 bg-muted/40 border-b border-border">
                 <div className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5" />
-                  </svg>
-                  <span className="font-semibold text-gray-900">{faculty.name}</span>
-                  <span className="text-xs text-indigo-400 ml-1">{faculty.departments.length} dept{faculty.departments.length !== 1 ? "s" : ""}</span>
+                  <Building2 className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-semibold text-foreground text-sm">{faculty.name}</span>
+                  <span className="text-metadata ml-1">
+                    {faculty.departments.length} dept{faculty.departments.length !== 1 ? "s" : ""}
+                  </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setAddDeptFor(faculty)}
-                    className="text-xs text-indigo-600 hover:text-indigo-800 font-medium px-2 py-1 rounded hover:bg-indigo-100"
-                  >
-                    + Department
-                  </button>
-                  <button
-                    onClick={() => deleteFaculty(faculty.id)}
-                    className="text-gray-400 hover:text-red-500 p-1 rounded"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => setAddDeptFor(faculty)}>
+                    <Plus className="w-3.5 h-3.5" />
+                    Department
+                  </Button>
+                  <Button variant="ghost" size="icon-sm" className="hover:text-destructive" onClick={() => deleteFaculty(faculty.id)}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
               </div>
 
-              {/* Departments */}
               {faculty.departments.length === 0 ? (
-                <p className="text-sm text-gray-400 px-5 py-4">No departments yet.</p>
+                <p className="text-sm text-muted-foreground px-5 py-4">No departments yet.</p>
               ) : (
-                <div className="divide-y divide-indigo-50">
+                <div className="divide-y divide-border">
                   {faculty.departments.map((dept) => (
-                    <div key={dept.id} className="flex items-center justify-between px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-300" />
-                        <span className="text-sm text-gray-700">{dept.name}</span>
+                    <div key={dept.id} className="flex items-center justify-between px-5 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary/40" />
+                        <span className="text-sm text-foreground">{dept.name}</span>
                       </div>
-                      <button
-                        onClick={() => deleteDept(dept.id)}
-                        className="text-gray-400 hover:text-red-500 p-1 rounded"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
+                      <Button variant="ghost" size="icon-sm" className="hover:text-destructive" onClick={() => deleteDept(dept.id)}>
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
+            </Card>
           ))}
         </div>
       )}
 
       {showAddFaculty && <AddFacultyModal onClose={() => setShowAddFaculty(false)} onCreated={load} />}
-      {addDeptFor && <AddDeptModal facultyId={addDeptFor.id} facultyName={addDeptFor.name} onClose={() => setAddDeptFor(null)} onCreated={load} />}
+      {addDeptFor && (
+        <AddDeptModal facultyId={addDeptFor.id} facultyName={addDeptFor.name} onClose={() => setAddDeptFor(null)} onCreated={load} />
+      )}
       {showBulkImport && <BulkImportModal onClose={() => setShowBulkImport(false)} onImported={load} />}
     </div>
   );

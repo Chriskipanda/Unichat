@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Search, Trash2, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 interface Teacher {
   id: string;
@@ -39,7 +45,9 @@ export default function AssignmentsPage() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   async function removeCr(id: string) {
     if (!confirm("Remove the Class Representative for this assignment?")) return;
@@ -48,7 +56,12 @@ export default function AssignmentsPage() {
   }
 
   async function removeAssignment(id: string) {
-    if (!confirm("Remove this teaching assignment? The teacher will need to re-add it, and its Class Rep (if any) loses that role unless they hold another assignment.")) return;
+    if (
+      !confirm(
+        "Remove this teaching assignment? The teacher will need to re-add it, and its Class Rep (if any) loses that role unless they hold another assignment."
+      )
+    )
+      return;
     await fetch(`/api/institution/assignments/${id}`, { method: "DELETE" });
     load();
   }
@@ -68,97 +81,88 @@ export default function AssignmentsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Teaching Assignments</h2>
-          <p className="text-gray-500 text-sm">Every teacher's registered course + NTA level, and who's Class Rep for it</p>
-        </div>
+      <div>
+        <h2 className="text-heading">Teaching Assignments</h2>
+        <p className="text-subtitle">Every teacher&apos;s registered course + NTA level, and who&apos;s Class Rep for it</p>
       </div>
 
-      <input
-        type="search"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search teacher, course, department, level, or CR…"
-        className="w-full max-w-md border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-      />
+      <div className="relative max-w-md">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search teacher, course, department, level, or CR…"
+          className="pl-8"
+        />
+      </div>
 
-      <div className="bg-white border border-indigo-100 rounded-xl overflow-hidden">
+      <Card className="p-0 overflow-hidden gap-0">
         {loading ? (
           <div className="flex items-center justify-center h-32">
-            <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+            <Loader2 className="w-5 h-5 text-primary animate-spin" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-12 text-gray-400 text-sm">
+          <div className="text-center py-12 text-muted-foreground text-sm">
             {assignments.length === 0
               ? "No teaching assignments yet — teachers register these from the Teacher Portal after logging in."
               : "No assignments match your search."}
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-indigo-50 border-b border-indigo-100">
-              <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Teacher</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Module</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide hidden lg:table-cell">Programme</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide hidden md:table-cell">NTA Level</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Class Rep</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-indigo-50">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="text-table-header px-4">Teacher</TableHead>
+                <TableHead className="text-table-header px-4">Module</TableHead>
+                <TableHead className="text-table-header px-4 hidden lg:table-cell">Programme</TableHead>
+                <TableHead className="text-table-header px-4 hidden md:table-cell">NTA Level</TableHead>
+                <TableHead className="text-table-header px-4">Class Rep</TableHead>
+                <TableHead className="px-4" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filtered.map((a) => (
-                <tr key={a.id} className="hover:bg-indigo-50/50 transition-colors align-top">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-gray-900">{a.teacher.fullName}</p>
-                    <p className="text-xs text-gray-400">{a.teacher.email || a.teacher.phone || "—"}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-gray-900 font-medium">{a.moduleName ?? <span className="italic text-gray-400 font-normal">Untitled module</span>}</p>
-                    <p className="text-xs text-gray-400 lg:hidden">{a.course.name}</p>
-                    {a.group && <p className="text-xs text-emerald-600 mt-0.5">{a.group._count.members} in room</p>}
-                    <p className="text-xs text-gray-500 md:hidden mt-0.5">{a.ntaLevel}</p>
-                  </td>
-                  <td className="px-4 py-3 hidden lg:table-cell">
-                    <p className="text-gray-900">{a.course.name}</p>
-                    <p className="text-xs text-gray-400">{a.course.department.name}</p>
-                  </td>
-                  <td className="px-4 py-3 text-gray-700 hidden md:table-cell">{a.ntaLevel}</td>
-                  <td className="px-4 py-3">
+                <TableRow key={a.id} className="align-top">
+                  <TableCell className="px-4 py-3 whitespace-normal">
+                    <p className="font-medium text-foreground text-sm">{a.teacher.fullName}</p>
+                    <p className="text-metadata">{a.teacher.email || a.teacher.phone || "—"}</p>
+                  </TableCell>
+                  <TableCell className="px-4 py-3 whitespace-normal">
+                    <p className="text-foreground font-medium text-sm">
+                      {a.moduleName ?? <span className="italic text-muted-foreground font-normal">Untitled module</span>}
+                    </p>
+                    <p className="text-metadata lg:hidden">{a.course.name}</p>
+                    {a.group && <p className="text-xs mt-0.5" style={{ color: "var(--success)" }}>{a.group._count.members} in room</p>}
+                    <p className="text-metadata md:hidden mt-0.5">{a.ntaLevel}</p>
+                  </TableCell>
+                  <TableCell className="px-4 py-3 hidden lg:table-cell whitespace-normal">
+                    <p className="text-foreground text-sm">{a.course.name}</p>
+                    <p className="text-metadata">{a.course.department.name}</p>
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-table-cell hidden md:table-cell">{a.ntaLevel}</TableCell>
+                  <TableCell className="px-4 py-3">
                     {a.cr ? (
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                          {a.cr.fullName}
-                        </span>
-                        <button
-                          onClick={() => removeCr(a.id)}
-                          className="text-xs text-gray-400 hover:text-red-500"
-                          title="Remove Class Rep"
-                        >
+                        <Badge className="bg-[var(--warning)]/10 text-[var(--warning)]">{a.cr.fullName}</Badge>
+                        <button onClick={() => removeCr(a.id)} className="text-xs text-muted-foreground hover:text-destructive" title="Remove Class Rep">
                           remove
                         </button>
                       </div>
                     ) : (
-                      <span className="text-gray-400 text-xs">Not assigned</span>
+                      <span className="text-muted-foreground text-xs">Not assigned</span>
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => removeAssignment(a.id)}
-                      className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                      title="Remove assignment"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </td>
-                </tr>
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-right">
+                    <Button variant="ghost" size="icon-sm" className="hover:text-destructive" onClick={() => removeAssignment(a.id)} title="Remove assignment">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

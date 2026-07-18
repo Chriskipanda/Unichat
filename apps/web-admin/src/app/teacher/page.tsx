@@ -1,6 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Plus, Trash2, Search, Loader2, MessageCircle, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+
+const ACCENT = "var(--color-auth-teacher)";
 
 interface Teacher {
   id: string;
@@ -53,6 +62,7 @@ interface Student {
 // NTA 7-1/7-2/8. "Other" always stays available as a free-text fallback.
 const DIPLOMA_LEVELS = ["NTA Level 4", "NTA Level 5", "NTA Level 6"];
 const BACHELOR_LEVELS = ["NTA Level 7-1", "NTA Level 7-2", "NTA Level 8"];
+const OTHER = "__other__";
 
 function levelsForCourse(course: Course | undefined): string[] {
   const name = course?.name.toLowerCase() ?? "";
@@ -98,94 +108,101 @@ function AddAssignmentModal({ onClose, onCreated }: { onClose: () => void; onCre
     });
     const data = await res.json();
     setSaving(false);
-    if (!res.ok) { setError(data.error ?? "Failed to add."); return; }
+    if (!res.ok) {
+      setError(data.error ?? "Failed to add.");
+      return;
+    }
     onCreated();
     onClose();
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Add Course Assignment</h3>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add Course Assignment</DialogTitle>
+        </DialogHeader>
         {courses.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            No courses in the catalog yet. Ask your institution admin to add one first.
-          </p>
+          <>
+            <p className="text-sm text-muted-foreground">No courses in the catalog yet. Ask your institution admin to add one first.</p>
+            <Button variant="outline" onClick={onClose} className="w-full">
+              Close
+            </Button>
+          </>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Course</label>
-              <select
-                value={courseId}
-                onChange={(e) => handleCourseChange(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                required
-              >
-                <option value="">Select course…</option>
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name} — {c.department.name}</option>
-                ))}
-              </select>
+              <Label className="mb-1.5">Course</Label>
+              <Select value={courseId} onValueChange={(v) => v && handleCourseChange(v)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select course…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {courses.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name} — {c.department.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">NTA Level</label>
-              <select
-                value={ntaLevelOther ? "__other__" : ntaLevel}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "__other__") { setNtaLevelOther(true); setNtaLevel(""); }
-                  else { setNtaLevelOther(false); setNtaLevel(v); }
+              <Label className="mb-1.5">NTA Level</Label>
+              <Select
+                value={ntaLevelOther ? OTHER : ntaLevel}
+                onValueChange={(v) => {
+                  if (v === OTHER) {
+                    setNtaLevelOther(true);
+                    setNtaLevel("");
+                  } else if (v) {
+                    setNtaLevelOther(false);
+                    setNtaLevel(v);
+                  }
                 }}
                 disabled={!courseId}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white disabled:bg-gray-50 disabled:text-gray-400"
-                required={!ntaLevelOther}
               >
-                <option value="">{courseId ? "Select NTA level…" : "Select a course first"}</option>
-                {availableLevels.map((lvl) => (
-                  <option key={lvl} value={lvl}>{lvl}</option>
-                ))}
-                <option value="__other__">Other…</option>
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={courseId ? "Select NTA level…" : "Select a course first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableLevels.map((lvl) => (
+                    <SelectItem key={lvl} value={lvl}>
+                      {lvl}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={OTHER}>Other…</SelectItem>
+                </SelectContent>
+              </Select>
               {ntaLevelOther && (
-                <input
-                  type="text"
+                <Input
                   value={ntaLevel}
                   onChange={(e) => setNtaLevel(e.target.value)}
                   placeholder="e.g. NTA Level 9"
-                  className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="mt-2"
                   required
                   autoFocus
                 />
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Module / Subject</label>
-              <input
-                type="text"
-                value={moduleName}
-                onChange={(e) => setModuleName(e.target.value)}
-                placeholder="e.g. Database Systems"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                required
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                The specific subject you teach within this programme + level. Creates that class's chat room.
-              </p>
+              <Label className="mb-1.5">Module / Subject</Label>
+              <Input value={moduleName} onChange={(e) => setModuleName(e.target.value)} placeholder="e.g. Database Systems" required />
+              <p className="text-metadata mt-1">The specific subject you teach within this programme + level. Creates that class&apos;s chat room.</p>
             </div>
-            {error && <p className="text-red-600 text-sm">{error}</p>}
-            <div className="flex gap-3 pt-2">
-              <button type="button" onClick={onClose} className="flex-1 border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-              <button type="submit" disabled={saving} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-60">
+            {error && <p className="text-destructive text-sm">{error}</p>}
+            <DialogFooter className="-mx-0 -mb-0 border-t-0 bg-transparent p-0 pt-2">
+              <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving} className="flex-1" style={{ backgroundColor: ACCENT }}>
+                {saving && <Loader2 className="animate-spin" />}
                 {saving ? "Adding…" : "Add"}
-              </button>
-            </div>
+              </Button>
+            </DialogFooter>
           </form>
         )}
-        {courses.length === 0 && (
-          <button onClick={onClose} className="w-full mt-4 border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">Close</button>
-        )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -228,52 +245,67 @@ function AssignCrModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 max-h-[80vh] flex flex-col">
-        <h3 className="text-lg font-bold text-gray-900 mb-1">Assign Class Representative</h3>
-        <p className="text-sm text-gray-500 mb-4">{assignment.moduleName ?? "Untitled module"} · {assignment.course.name} · {assignment.ntaLevel}</p>
-        <p className="text-xs text-gray-400 -mt-3 mb-4">Showing students whose course + NTA level match this class.</p>
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search student by name or ID…"
-          className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-3"
-          autoFocus
-        />
-        <div className="flex-1 overflow-y-auto -mx-2 px-2">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-sm max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Assign Class Representative</DialogTitle>
+          <DialogDescription>
+            {assignment.moduleName ?? "Untitled module"} · {assignment.course.name} · {assignment.ntaLevel}
+            <br />
+            Showing students whose course + NTA level match this class.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="relative shrink-0">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search student by name or ID…"
+            className="pl-8"
+            autoFocus
+          />
+        </div>
+        <div className="flex-1 overflow-y-auto -mx-1 px-1 min-h-24">
           {loading ? (
             <div className="flex items-center justify-center h-24">
-              <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+              <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
             </div>
           ) : students.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">No students found.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">No students found.</p>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {students.map((s) => (
                 <button
                   key={s.id}
                   onClick={() => assign(s.id)}
                   disabled={assigning !== ""}
-                  className="w-full flex items-center justify-between text-left px-3 py-2.5 rounded-lg hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                  className="w-full flex items-center justify-between text-left px-3 py-2.5 rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
                 >
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{s.fullName}</p>
-                    <p className="text-xs text-gray-500">{s.studentId ?? "—"}{s.role === "class_rep" ? " · Currently a CR" : ""}</p>
+                    <p className="text-sm font-medium text-foreground">{s.fullName}</p>
+                    <p className="text-metadata">
+                      {s.studentId ?? "—"}
+                      {s.role === "class_rep" ? " · Currently a CR" : ""}
+                    </p>
                   </div>
                   {assigning === s.id ? (
-                    <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" style={{ color: ACCENT }} />
                   ) : (
-                    <span className="text-xs font-medium text-emerald-600">Select</span>
+                    <span className="text-xs font-medium" style={{ color: ACCENT }}>
+                      Select
+                    </span>
                   )}
                 </button>
               ))}
             </div>
           )}
         </div>
-        <button onClick={onClose} className="mt-4 w-full border border-gray-200 text-gray-700 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-      </div>
-    </div>
+        <Button variant="outline" onClick={onClose} className="shrink-0">
+          Cancel
+        </Button>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -293,10 +325,17 @@ export default function TeacherPortalPage() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   async function removeAssignment(id: string) {
-    if (!confirm("Remove this course assignment? The Class Rep for it (if any) will lose that role, unless they hold it for another assignment too.")) return;
+    if (
+      !confirm(
+        "Remove this course assignment? The Class Rep for it (if any) will lose that role, unless they hold it for another assignment too."
+      )
+    )
+      return;
     await fetch(`/api/teacher/assignments/${id}`, { method: "DELETE" });
     load();
   }
@@ -310,112 +349,99 @@ export default function TeacherPortalPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+        <Loader2 className="w-6 h-6 animate-spin" style={{ color: ACCENT }} />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Profile */}
-      <div className="bg-white border border-emerald-100 rounded-xl p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">My Profile</h2>
+      <Card className="p-6">
+        <h2 className="text-title mb-4">My Profile</h2>
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
           <div>
-            <dt className="text-gray-500">Full Name</dt>
-            <dd className="text-gray-900 font-medium">{teacher?.fullName ?? "—"}</dd>
+            <dt className="text-metadata">Full Name</dt>
+            <dd className="text-foreground font-medium">{teacher?.fullName ?? "—"}</dd>
           </div>
           <div>
-            <dt className="text-gray-500">Email</dt>
-            <dd className="text-gray-900 font-medium">{teacher?.email ?? "—"}</dd>
+            <dt className="text-metadata">Email</dt>
+            <dd className="text-foreground font-medium">{teacher?.email ?? "—"}</dd>
           </div>
           <div>
-            <dt className="text-gray-500">Phone</dt>
-            <dd className="text-gray-900 font-medium">{teacher?.phone ?? "—"}</dd>
+            <dt className="text-metadata">Phone</dt>
+            <dd className="text-foreground font-medium">{teacher?.phone ?? "—"}</dd>
           </div>
           <div>
-            <dt className="text-gray-500">Department</dt>
-            <dd className="text-gray-900 font-medium">{teacher?.department?.name ?? "Not assigned yet"}</dd>
+            <dt className="text-metadata">Department</dt>
+            <dd className="text-foreground font-medium">{teacher?.department?.name ?? "Not assigned yet"}</dd>
           </div>
         </dl>
-        <p className="text-xs text-gray-400 mt-4">
-          Contact your institution admin to update your name, email, phone, or department.
-        </p>
-      </div>
+        <p className="text-metadata mt-4">Contact your institution admin to update your name, email, phone, or department.</p>
+      </Card>
 
-      {/* Assignments */}
-      <div className="bg-white border border-emerald-100 rounded-xl p-6">
-        <div className="flex items-center justify-between mb-4">
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4 gap-3">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Courses I Teach</h2>
-            <p className="text-sm text-gray-500">Register a module you teach + its programme and NTA level — this creates that class's chat room, and you can assign a Class Rep for it.</p>
+            <h2 className="text-title">Courses I Teach</h2>
+            <p className="text-subtitle mt-0.5">
+              Register a module you teach + its programme and NTA level — this creates that class&apos;s chat room, and you can assign
+              a Class Rep for it.
+            </p>
           </div>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors shrink-0"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+          <Button onClick={() => setShowAdd(true)} className="shrink-0" style={{ backgroundColor: ACCENT }}>
+            <Plus />
             Add
-          </button>
+          </Button>
         </div>
 
         {assignments.length === 0 ? (
-          <div className="text-center py-10 text-gray-400 text-sm">
+          <div className="text-center py-10 text-muted-foreground text-sm">
             No course assignments yet. Add the course and NTA level you teach to get started.
           </div>
         ) : (
           <div className="space-y-3">
             {assignments.map((a) => (
-              <div key={a.id} className="border border-emerald-100 rounded-xl p-4">
-                <div className="flex items-start justify-between">
+              <div key={a.id} className="border border-border rounded-xl p-4">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-gray-900">{a.moduleName ?? <span className="italic text-gray-400">Untitled module — remove and re-add to name it</span>}</p>
-                    <p className="text-xs text-gray-500">{a.course.name} · {a.course.department.name} · {a.ntaLevel}</p>
+                    <p className="font-semibold text-foreground text-sm">
+                      {a.moduleName ?? <span className="italic text-muted-foreground font-normal">Untitled module — remove and re-add to name it</span>}
+                    </p>
+                    <p className="text-metadata">
+                      {a.course.name} · {a.course.department.name} · {a.ntaLevel}
+                    </p>
                     {a.group && (
-                      <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                        </svg>
+                      <p className="text-xs mt-1 flex items-center gap-1" style={{ color: ACCENT }}>
+                        <MessageCircle className="w-3.5 h-3.5" />
                         Class room · {a.group._count.members} member{a.group._count.members === 1 ? "" : "s"}
                       </p>
                     )}
                   </div>
-                  <button
-                    onClick={() => removeAssignment(a.id)}
-                    className="text-gray-400 hover:text-red-500 p-1 rounded"
-                    title="Remove assignment"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  <Button variant="ghost" size="icon-sm" className="hover:text-destructive shrink-0" onClick={() => removeAssignment(a.id)} title="Remove assignment">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
 
-                <div className="mt-3 pt-3 border-t border-emerald-50 flex items-center justify-between">
+                <div className="mt-3 pt-3 border-t border-border flex items-center justify-between flex-wrap gap-2">
                   {a.cr ? (
                     <div>
-                      <p className="text-xs text-gray-500">Class Rep</p>
-                      <p className="text-sm font-medium text-gray-900">{a.cr.fullName} <span className="text-gray-400 font-normal">{a.cr.studentId ? `· ${a.cr.studentId}` : ""}</span></p>
+                      <p className="text-metadata">Class Rep</p>
+                      <p className="text-sm font-medium text-foreground">
+                        {a.cr.fullName} <span className="text-muted-foreground font-normal">{a.cr.studentId ? `· ${a.cr.studentId}` : ""}</span>
+                      </p>
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-400">No Class Rep assigned</p>
+                    <p className="text-sm text-muted-foreground">No Class Rep assigned</p>
                   )}
-                  <div className="flex gap-2 shrink-0">
-                    <button
-                      onClick={() => setCrTarget(a)}
-                      className="text-xs font-medium text-emerald-600 hover:text-emerald-800 px-2 py-1 rounded hover:bg-emerald-50"
-                    >
+                  <div className="flex gap-1 shrink-0">
+                    <Button variant="ghost" size="sm" onClick={() => setCrTarget(a)} style={{ color: ACCENT }}>
+                      <Users className="w-3.5 h-3.5" />
                       {a.cr ? "Change" : "Assign CR"}
-                    </button>
+                    </Button>
                     {a.cr && (
-                      <button
-                        onClick={() => removeCr(a.id)}
-                        className="text-xs font-medium text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50"
-                      >
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => removeCr(a.id)}>
                         Remove
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -423,7 +449,7 @@ export default function TeacherPortalPage() {
             ))}
           </div>
         )}
-      </div>
+      </Card>
 
       {showAdd && <AddAssignmentModal onClose={() => setShowAdd(false)} onCreated={load} />}
       {crTarget && <AssignCrModal assignment={crTarget} onClose={() => setCrTarget(null)} onAssigned={load} />}

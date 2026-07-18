@@ -1,6 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { LogOut } from "lucide-react";
+import { LogoMark } from "@/components/auth/icons";
+import { Button } from "@/components/ui/button";
+
+const ACCENT = "var(--color-auth-teacher)";
+const ACCENT_DARK = "var(--color-auth-teacher-dark)";
 
 export default function TeacherLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -11,27 +17,28 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
   }
 
   return (
-    <div className="min-h-screen bg-emerald-50">
-      <header className="bg-emerald-950 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center shrink-0">
-            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
-            </svg>
+    <div className="min-h-screen bg-muted/30">
+      <header
+        className="px-4 sm:px-6 py-3.5 flex items-center justify-between"
+        style={{ background: `linear-gradient(155deg, ${ACCENT_DARK}, ${ACCENT})` }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 bg-white/15 backdrop-blur rounded-lg flex items-center justify-center shrink-0 ring-1 ring-white/20">
+            <LogoMark className="w-4 h-4 text-white" />
           </div>
           <span className="text-white text-sm font-semibold">Teacher Portal</span>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={handleSignOut}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-emerald-300 hover:bg-emerald-900 hover:text-white transition-colors"
+          className="text-white/80 hover:text-white hover:bg-white/10"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
+          <LogOut className="w-4 h-4" />
           Sign out
-        </button>
+        </Button>
       </header>
-      <main className="max-w-3xl mx-auto p-6">{children}</main>
+      <main className="max-w-3xl mx-auto p-4 sm:p-6">{children}</main>
     </div>
   );
 }
