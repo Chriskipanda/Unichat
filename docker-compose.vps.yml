@@ -196,6 +196,9 @@ services:
     environment:
       PORT: 3006
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env — no insecure default is provided}
+      # Public address returned in uploaded-file URLs — must be reachable from
+      # the browser/app, not just from inside the compose network.
+      PUBLIC_MEDIA_URL: ${PUBLIC_MEDIA_URL:-http://169.58.31.132}
     volumes:
       - ./services/media-service/uploads:/app/services/media-service/uploads
 
@@ -212,9 +215,11 @@ services:
       - "3000:3000"
     environment:
       AUTH_SERVICE_URL: http://auth-service:3001
+      MEDIA_SERVICE_URL: http://media-service:3006
       NODE_ENV: production
     depends_on:
       - auth-service
+      - media-service
 
   # One-shot: builds the Flutter web app using a containerized Flutter SDK —
   # nothing is installed on the VPS host itself. Not part of the normal

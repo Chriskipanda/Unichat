@@ -239,8 +239,13 @@ fastify.post('/api/v1/messages/:groupId/media', { preHandler: bearerAuth }, asyn
   const messageId = crypto.randomUUID();
   const now = new Date();
 
-  const isVideo = mimeType.startsWith('video/');
-  const msgType = isVideo ? 'video' : 'image';
+  const msgType = mimeType.startsWith('video/') ? 'video'
+    : mimeType.startsWith('audio/') ? 'audio'
+    : mimeType.startsWith('image/') ? 'image'
+    : 'document';
+  const fileMetadata = msgType === 'document' || msgType === 'audio'
+    ? { originalName, mimeType }
+    : {};
 
   // Relative URL — nginx routes /api/v1/messages/* to messaging_service
   const fileUrl = `/api/v1/messages/uploads/${filename}`;
@@ -253,7 +258,7 @@ fastify.post('/api/v1/messages/:groupId/media', { preHandler: bearerAuth }, asyn
   try {
     await prisma.message.create({
       data: {
-        id: messageId, tenantId, groupId, senderId, content: fileUrl, type: msgType,
+        id: messageId, tenantId, groupId, senderId, content: fileUrl, type: msgType, metadata: fileMetadata,
         clientMessageId: fields.clientMessageId || undefined, createdAt: now,
       },
     });
@@ -279,6 +284,7 @@ fastify.post('/api/v1/messages/:groupId/media', { preHandler: bearerAuth }, asyn
     tenantId,
     timestamp: now.toISOString(),
     type: msgType,
+    metadata: fileMetadata,
     originalName,
     seq,
   };
@@ -298,8 +304,39 @@ async function serializeExisting(existing) {
     id: existing.id, roomId: existing.groupId, content: existing.content, senderId: existing.senderId,
     senderName: sender?.fullName ?? 'Unknown', senderAvatar: sender?.avatarUrl ?? null,
     tenantId: existing.tenantId, replyToId: existing.replyToId, timestamp: existing.createdAt.toISOString(),
-    type: existing.type ?? 'text',
+    type: existing.type ?? 'text', metadata: existing.metadata ?? {},
   };
+}
+
+// Types sendable through the plain (non-file) send route below — each is
+// just structured data in `metadata`, no upload involved. Media types
+// ('image'/'video'/'document'/'audio') only ever come from the /media route.
+const METADATA_MESSAGE_TYPES = ['text', 'location', 'contact', 'poll', 'event'];
+
+function validateMetadataForType(type, metadata) {
+  if (type === 'poll') {
+    const question = metadata?.question?.trim();
+    const options = Array.isArray(metadata?.options) ? metadata.options.filter((o) => typeof o === 'string' && o.trim()) : [];
+    if (!question || options.length < 2) return null;
+    return { question, options: options.map((text) => ({ text: text.trim(), votes: [] })) };
+  }
+  if (type === 'location') {
+    const { lat, lng } = metadata || {};
+    if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+    return { lat, lng, label: typeof metadata.label === 'string' ? metadata.label : null };
+  }
+  if (type === 'contact') {
+    const name = metadata?.name?.trim();
+    if (!name) return null;
+    return { name, phone: typeof metadata.phone === 'string' ? metadata.phone : null };
+  }
+  if (type === 'event') {
+    const title = metadata?.title?.trim();
+    const startsAt = metadata?.startsAt;
+    if (!title || !startsAt || Number.isNaN(Date.parse(startsAt))) return null;
+    return { title, startsAt, location: typeof metadata.location === 'string' ? metadata.location : null };
+  }
+  return {};
 }
 
 /**
@@ -308,10 +345,17 @@ async function serializeExisting(existing) {
 fastify.post('/api/v1/messages/:groupId', { preHandler: bearerAuth }, async (request, reply) => {
   const { groupId } = request.params;
   const { userId: senderId, tenantId } = request.user;
-  const { content, replyToId, clientMessageId } = request.body || {};
+  const { content, replyToId, clientMessageId, type = 'text', metadata } = request.body || {};
 
   if (!content) {
     return reply.code(400).send({ error: 'content is required' });
+  }
+  if (!METADATA_MESSAGE_TYPES.includes(type)) {
+    return reply.code(400).send({ error: `Unsupported message type: ${type}` });
+  }
+  const resolvedMetadata = validateMetadataForType(type, metadata);
+  if (resolvedMetadata === null) {
+    return reply.code(400).send({ error: `Invalid or missing metadata for a ${type} message` });
   }
 
   if (!(await isRoomMember(groupId, senderId))) {
@@ -341,6 +385,7 @@ fastify.post('/api/v1/messages/:groupId', { preHandler: bearerAuth }, async (req
     saved = await prisma.message.create({
       data: {
         id: messageId, tenantId, groupId, senderId, content, replyToId: resolvedReplyToId,
+        type, metadata: resolvedMetadata,
         clientMessageId: clientMessageId || undefined, createdAt: now,
       },
       include: { replyTo: { include: { sender: { select: { fullName: true } } } } },
@@ -363,7 +408,7 @@ fastify.post('/api/v1/messages/:groupId', { preHandler: bearerAuth }, async (req
   const payload = {
     id: messageId, roomId: groupId, content, senderId, senderName: sender?.fullName ?? 'Unknown',
     tenantId, replyToId: resolvedReplyToId, timestamp: now.toISOString(),
-    type: 'text', seq,
+    type, metadata: resolvedMetadata, seq,
     replyTo: serializeReplyTo(saved.replyTo),
   };
 
@@ -372,6 +417,50 @@ fastify.post('/api/v1/messages/:groupId', { preHandler: bearerAuth }, async (req
 
   fastify.log.info(`Message saved (HTTP) in room ${groupId} by ${senderId}`);
   return reply.code(201).send({ message: payload });
+});
+
+/**
+ * Vote (or change/retract a vote) on a poll message. Single-choice: picking
+ * a new option removes any prior vote by this user; voting the option
+ * already held retracts it. Not the text-edit route on purpose — voting is
+ * available to every room member, not just the poll's sender.
+ */
+fastify.post('/api/v1/messages/:groupId/:messageId/vote', { preHandler: bearerAuth }, async (request, reply) => {
+  const { groupId, messageId } = request.params;
+  const { userId } = request.user;
+  const { optionIndex } = request.body || {};
+
+  if (!(await isRoomMember(groupId, userId))) {
+    return reply.code(403).send({ error: 'Not a member of this room' });
+  }
+  if (!Number.isInteger(optionIndex)) {
+    return reply.code(400).send({ error: 'optionIndex is required' });
+  }
+
+  const message = await prisma.message.findFirst({ where: { id: messageId, groupId } });
+  if (!message) return reply.code(404).send({ error: 'Message not found' });
+  if (message.type !== 'poll') return reply.code(400).send({ error: 'Not a poll message' });
+  if (message.deletedAt) return reply.code(400).send({ error: 'Cannot vote on a deleted message' });
+
+  const options = Array.isArray(message.metadata?.options) ? message.metadata.options : [];
+  if (optionIndex < 0 || optionIndex >= options.length) {
+    return reply.code(400).send({ error: 'Invalid optionIndex' });
+  }
+
+  const alreadyOnThis = options[optionIndex].votes.includes(userId);
+  const nextOptions = options.map((opt, i) => ({
+    text: opt.text,
+    votes: i === optionIndex
+      ? (alreadyOnThis ? opt.votes.filter((v) => v !== userId) : [...opt.votes.filter((v) => v !== userId), userId])
+      : opt.votes.filter((v) => v !== userId),
+  }));
+  const nextMetadata = { ...message.metadata, options: nextOptions };
+
+  await prisma.message.update({ where: { id: messageId }, data: { metadata: nextMetadata } });
+
+  if (io) io.to(groupId).emit('message_voted', { roomId: groupId, messageId, metadata: nextMetadata });
+
+  return { messageId, metadata: nextMetadata };
 });
 
 /**

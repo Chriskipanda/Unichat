@@ -45,5 +45,15 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>UniChat needs camera access to take photos and videos to share in chat.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>UniChat needs photo library access to share photos and videos in chat.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>UniChat needs microphone access to record voice messages.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>UniChat needs location access to share your location in a chat.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>UniChat needs contacts access to let you share a contact in a chat.</string>
 </dict>
 </plist>

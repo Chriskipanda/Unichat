@@ -449,6 +449,21 @@ class _HomeScreenState extends State<HomeScreen> {
           Uri.parse('http://${Config.baseUrl}/api/v1/student/clubs/${club.id}/join'),
           headers: {'Authorization': 'Bearer ${widget.token}'},
         ).timeout(const Duration(seconds: 10));
+        // Drop straight into the club's chat room — joining with nothing
+        // visibly happening next was the exact complaint this fixes.
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ChatScreen(
+                roomId: club.id, roomName: club.name, subtitle: club.category,
+                isGroup: true, isOnline: false,
+                avatarUrl: null, canEditAvatar: false, muted: false,
+                user: widget.user, token: widget.token,
+              ),
+            ),
+          );
+        }
       }
     } catch (_) {
       // Revert on failure
@@ -2518,7 +2533,19 @@ class _HomeScreenState extends State<HomeScreen> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {},
+        onTap: club.isJoined
+            ? () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChatScreen(
+                      roomId: club.id, roomName: club.name, subtitle: club.category,
+                      isGroup: true, isOnline: false,
+                      avatarUrl: null, canEditAvatar: false, muted: false,
+                      user: widget.user, token: widget.token,
+                    ),
+                  ),
+                )
+            : null,
         splashColor: club.color.withValues(alpha: 0.08),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),

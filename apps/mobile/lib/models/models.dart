@@ -128,8 +128,14 @@ enum MessageStatus { sending, sent, delivered, read }
 
 /// Media messages carry a URL in `content`, so anywhere a bitmap can't be drawn
 /// — chat-list previews, reply quotes — shows this label instead of the URL.
-bool isMediaType(String? type) => type == 'image' || type == 'video';
-String mediaLabelFor(String? type) => type == 'video' ? '🎥 Video' : '📷 Photo';
+bool isMediaType(String? type) =>
+    type == 'image' || type == 'video' || type == 'document' || type == 'audio';
+String mediaLabelFor(String? type) => switch (type) {
+      'video' => '🎥 Video',
+      'document' => '📄 Document',
+      'audio' => '🎤 Voice message',
+      _ => '📷 Photo',
+    };
 
 class Message {
   /// Server-assigned UUID. Optimistic sends start with a temporary local id and
@@ -158,6 +164,12 @@ class Message {
   bool failed;
   /// userId -> emoji, one active reaction per user.
   Map<String, String> reactions;
+  /// Raw server type ('text'/'image'/'video'/'document'/'audio'/'location'/
+  /// 'contact'/'poll'/'event') — media types still collapse `content` to a
+  /// label (see isMediaType) but keep their real payload here instead, so a
+  /// bubble can render the rich card (poll options, a map link, ...).
+  final String type;
+  final Map<String, dynamic> metadata;
 
   Message({
     required this.id,
@@ -176,8 +188,11 @@ class Message {
     this.deleted = false,
     this.failed = false,
     Map<String, String>? reactions,
+    this.type = 'text',
+    Map<String, dynamic>? metadata,
   })  : clientMessageId = clientMessageId ?? _generateId(),
-        reactions = reactions ?? {};
+        reactions = reactions ?? {},
+        metadata = metadata ?? {};
 
   static int _idCounter = 0;
   // A unique-enough id without pulling in a uuid package: wall-clock time
@@ -193,7 +208,20 @@ class Message {
     return '$now-$_idCounter-$rand';
   }
 
-  bool get isImage => localImagePath != null || imageUrl != null;
+  // Document/audio also route their download URL through `imageUrl` (see
+  // fromJson) to reuse the same "isMedia" URL-resolution path as image/video,
+  // but they render as a file tile / audio player, not a picture — excluded
+  // here so the image bubble renderer never sees them.
+  bool get isImage => type != 'document' && type != 'audio' && (localImagePath != null || imageUrl != null);
+  bool get isDocument => type == 'document';
+  bool get isAudioMessage => type == 'audio';
+  bool get isLocation => type == 'location';
+  bool get isContactShare => type == 'contact';
+  bool get isPoll => type == 'poll';
+  bool get isEvent => type == 'event';
+  /// True for any of the non-text, non-image/video "special" bubble types —
+  /// the one flag chat_screen needs to pick the special-content renderer.
+  bool get isSpecial => isDocument || isAudioMessage || isLocation || isContactShare || isPoll || isEvent;
 
   /// The only sanctioned way to move status forward. sending → sent →
   /// delivered → read is a one-way progression — a slow HTTP response or a
@@ -237,6 +265,8 @@ class Message {
       editedAt: data['editedAt'] != null ? DateTime.tryParse(data['editedAt'].toString())?.toLocal() : null,
       deleted: data['deleted'] as bool? ?? false,
       reactions: _parseReactions(data['reactions']),
+      type: type ?? 'text',
+      metadata: data['metadata'] is Map ? Map<String, dynamic>.from(data['metadata'] as Map) : {},
     );
   }
 

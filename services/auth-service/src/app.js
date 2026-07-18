@@ -935,6 +935,123 @@ fastify.delete('/api/v1/teacher/assignments/:id/cr', { preHandler: teacherOnly }
   return reply.code(204).send();
 });
 
+// Self-service profile update — deliberately narrow. Name/email/phone/
+// department stay admin-managed (see /api/v1/institution/users); a teacher's
+// photo is the one thing purely theirs to change.
+fastify.patch('/api/v1/teacher/me', { preHandler: teacherOnly }, async (request, reply) => {
+  const { userId } = request.user;
+  const { avatarUrl } = request.body || {};
+  if (typeof avatarUrl !== 'string') {
+    return reply.code(400).send({ error: 'avatarUrl is required' });
+  }
+  const teacher = await prisma.user.update({
+    where: { id: userId },
+    data: { avatarUrl: avatarUrl || null },
+    select: {
+      id: true, fullName: true, email: true, phone: true, role: true, avatarUrl: true,
+      department: { select: { id: true, name: true } },
+    },
+  });
+  return { teacher };
+});
+
+// Clubs — tenant-wide like /api/v1/student/clubs, but scoped to what a
+// teacher needs to manage the ones they run: ownership + join state per club.
+fastify.get('/api/v1/teacher/clubs', { preHandler: teacherOnly }, async (request) => {
+  const { userId, tenantId } = request.user;
+  const clubs = await prisma.group.findMany({
+    where: { tenantId, type: 'club' },
+    include: {
+      _count: { select: { members: true } },
+      members: { where: { userId } },
+    },
+    orderBy: { name: 'asc' },
+  });
+  return {
+    clubs: clubs.map((c) => ({
+      id: c.id,
+      name: c.name,
+      description: c.description ?? '',
+      avatarUrl: c.avatarUrl ?? null,
+      memberCount: c._count.members,
+      isJoined: c.members.length > 0,
+      isOwner: c.createdBy === userId,
+      createdAt: c.createdAt,
+    })),
+  };
+});
+
+fastify.post('/api/v1/teacher/clubs', { preHandler: teacherOnly }, async (request, reply) => {
+  const { userId, tenantId } = request.user;
+  const { name, description, category } = request.body || {};
+  if (!name?.trim()) return reply.code(400).send({ error: 'Club name is required' });
+
+  const existing = await prisma.group.findFirst({ where: { tenantId, name: name.trim(), type: 'club' } });
+  if (existing) return reply.code(409).send({ error: 'A club with that name already exists' });
+
+  const club = await prisma.group.create({
+    data: {
+      tenantId,
+      name: name.trim(),
+      description: description?.trim() || null,
+      type: 'club',
+      createdBy: userId,
+      members: { create: [{ userId, role: 'owner' }] },
+    },
+  });
+  fastify.log.info(`[CLUB CREATED] "${club.name}" by ${userId}`);
+  return reply.code(201).send({
+    club: { id: club.id, name: club.name, description: club.description ?? '', category: category || 'General', memberCount: 1, isJoined: true, isOwner: true },
+  });
+});
+
+fastify.delete('/api/v1/teacher/clubs/:id', { preHandler: teacherOnly }, async (request, reply) => {
+  const { userId, tenantId } = request.user;
+  const { id } = request.params;
+  const result = await prisma.group.deleteMany({ where: { id, tenantId, type: 'club', createdBy: userId } });
+  if (result.count === 0) return reply.code(404).send({ error: 'Club not found, or you did not create it' });
+  return reply.code(204).send();
+});
+
+// Roster for any room a teacher has standing in — their own class (via
+// TeacherAssignment), a club they created, or simply a room they belong to.
+// Works for both 'course' and 'club' room types so one dialog on the
+// frontend covers "who's in my class" and "who's in my club".
+fastify.get('/api/v1/teacher/rooms/:roomId/members', { preHandler: teacherOnly }, async (request, reply) => {
+  const { userId, tenantId } = request.user;
+  const { roomId } = request.params;
+
+  const group = await prisma.group.findFirst({ where: { id: roomId, tenantId } });
+  if (!group) return reply.code(404).send({ error: 'Room not found' });
+
+  const [ownsAssignment, isMember] = await Promise.all([
+    prisma.teacherAssignment.findFirst({ where: { groupId: roomId, teacherId: userId, tenantId } }),
+    prisma.groupMember.findUnique({ where: { groupId_userId: { groupId: roomId, userId } } }),
+  ]);
+  const authorized = group.createdBy === userId || !!ownsAssignment || !!isMember;
+  if (!authorized) return reply.code(403).send({ error: 'Not authorized to view this room\'s roster' });
+
+  const members = await prisma.groupMember.findMany({
+    where: { groupId: roomId },
+    include: { user: { select: { id: true, fullName: true, studentId: true, staffId: true, role: true, avatarUrl: true } } },
+    orderBy: { joinedAt: 'asc' },
+  });
+
+  return {
+    room: { id: group.id, name: group.name, type: group.type },
+    members: members.map((m) => ({
+      id: m.user.id,
+      fullName: m.user.fullName,
+      studentId: m.user.studentId ?? null,
+      staffId: m.user.staffId ?? null,
+      role: m.user.role,
+      avatarUrl: m.user.avatarUrl ?? null,
+      roomRole: m.role,
+      joinedAt: m.joinedAt,
+    })),
+  };
+});
+
 // ─────────────────────────────────────────────────────────────────
 // Institution Admin — read-only visibility + override control over every
 // teacher's course/NTA-level assignments and Class Rep picks, institution-

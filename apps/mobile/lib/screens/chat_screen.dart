@@ -7,6 +7,11 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
+import 'package:file_picker/file_picker.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
 import '../config.dart';
 import '../models/models.dart';
 import '../services/active_chat_tracker.dart';
@@ -14,6 +19,8 @@ import '../services/chat_cache.dart';
 import '../services/outbox.dart';
 import '../widgets/attachment_sheet.dart';
 import '../widgets/chat_wallpaper.dart';
+import '../widgets/attachment_bubbles.dart';
+import '../widgets/attachment_composers.dart';
 
 class ChatScreen extends StatefulWidget {
   final String roomId;
@@ -43,6 +50,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final _msgCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   final _imagePicker = ImagePicker();
+  final _audioRecorder = AudioRecorder();
   final List<Message> _messages = [];
   bool _isTyping = false;
   bool _loadingHistory = true;
@@ -272,6 +280,23 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             _messages[idx].isEdited = true;
             _messages[idx].editedAt = DateTime.tryParse(d['editedAt']?.toString() ?? '')?.toLocal();
           }
+        });
+      });
+      // A poll's vote tally changed — server sends the full recomputed
+      // options array back rather than a delta. metadata's map contents are
+      // mutable even though the field itself is final, so this updates in
+      // place instead of reconstructing the Message (which would risk
+      // silently dropping whichever field the reconstruction forgot).
+      _socket!.on('message_voted', (data) {
+        if (!mounted) return;
+        final d = Map<String, dynamic>.from(data);
+        if (d['roomId'] != widget.roomId) return;
+        final idx = _messages.indexWhere((m) => m.id == d['messageId']);
+        if (idx == -1 || d['metadata'] is! Map) return;
+        setState(() {
+          _messages[idx].metadata
+            ..clear()
+            ..addAll(Map<String, dynamic>.from(d['metadata'] as Map));
         });
       });
       // Deleted for everyone — render as a tombstone rather than removing it,
@@ -645,6 +670,237 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
   }
 
+  /// Shared upload path for document/audio attachments — mirrors
+  /// _sendImageFile but with no local-preview thumbnail and an explicit
+  /// `type` so the optimistic bubble renders correctly before the server
+  /// confirms (see Message.isImage, which excludes these two types).
+  Future<void> _sendAttachmentFile(File file, {required String type, required String pendingLabel, String? originalName}) async {
+    final msg = Message(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      content: pendingLabel,
+      senderId: widget.user.id,
+      senderName: widget.user.fullName,
+      senderAvatar: widget.user.avatarUrl,
+      timestamp: DateTime.now(),
+      status: MessageStatus.sending,
+      type: type,
+      metadata: {if (originalName != null) 'originalName': originalName},
+    );
+    setState(() => _messages.add(msg));
+    _scrollToBottom(animated: true);
+
+    try {
+      final baseUrl = Config.baseUrl.startsWith('http') ? Config.baseUrl : 'http://${Config.baseUrl}';
+      final req = http.MultipartRequest('POST', Uri.parse('$baseUrl/api/v1/messages/${widget.roomId}/media'))
+        ..headers['Authorization'] = 'Bearer ${widget.token}'
+        ..fields['clientMessageId'] = msg.clientMessageId
+        ..files.add(await http.MultipartFile.fromPath('file', file.path));
+
+      final streamed = await req.send().timeout(const Duration(seconds: 60));
+      if (!mounted) return;
+
+      if (streamed.statusCode == 201 || streamed.statusCode == 200) {
+        final body = await streamed.stream.bytesToString();
+        final decoded = jsonDecode(body) as Map<String, dynamic>;
+        final sent = (decoded['message'] as Map?)?.cast<String, dynamic>();
+        final relativeUrl = sent?['content'] as String?;
+        if (relativeUrl != null) msg.imageUrl = '$baseUrl$relativeUrl';
+        final serverId = sent?['id'] as String?;
+        if (serverId != null) msg.id = serverId;
+        setState(() => msg.upgradeStatus(MessageStatus.sent));
+        if (sent != null) await ChatCache.appendMessage(widget.roomId, sent);
+      } else {
+        if (mounted) setState(() => msg.failed = true);
+      }
+    } catch (_) {
+      if (mounted) setState(() => msg.failed = true);
+    }
+  }
+
+  /// Shared send path for the structured (non-file) special types — location,
+  /// contact, poll, event. No offline queue, same simplification the image
+  /// send path already makes (see _sendImageFile's comment on Outbox).
+  Future<void> _sendStructuredMessage({required String type, required String content, required Map<String, dynamic> metadata}) async {
+    final msg = Message(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      content: content,
+      senderId: widget.user.id,
+      senderName: widget.user.fullName,
+      senderAvatar: widget.user.avatarUrl,
+      timestamp: DateTime.now(),
+      status: MessageStatus.sending,
+      type: type,
+      metadata: metadata,
+    );
+    setState(() => _messages.add(msg));
+    _scrollToBottom(animated: true);
+
+    try {
+      final res = await http.post(
+        Uri.parse('http://${Config.baseUrl}/api/v1/messages/${widget.roomId}'),
+        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+        body: jsonEncode({'content': content, 'type': type, 'metadata': metadata, 'clientMessageId': msg.clientMessageId}),
+      ).timeout(const Duration(seconds: 10));
+      if (!mounted) return;
+      if (res.statusCode == 201 || res.statusCode == 200) {
+        final sent = (jsonDecode(res.body)['message'] as Map?)?.cast<String, dynamic>();
+        final serverId = sent?['id'] as String?;
+        if (serverId != null) msg.id = serverId;
+        setState(() => msg.upgradeStatus(MessageStatus.sent));
+        if (sent != null) await ChatCache.appendMessage(widget.roomId, sent);
+      } else {
+        if (mounted) setState(() => msg.failed = true);
+      }
+    } catch (_) {
+      if (mounted) setState(() => msg.failed = true);
+    }
+  }
+
+  Future<void> _pickDocument() async {
+    _closeAttachPanel();
+    final result = await FilePicker.platform.pickFiles(withData: false);
+    if (!mounted || result == null) return;
+    final path = result.files.single.path;
+    if (path == null) return;
+    await _sendAttachmentFile(File(path), type: 'document', pendingLabel: '📄 ${result.files.single.name}', originalName: result.files.single.name);
+  }
+
+  Future<void> _pickLocation() async {
+    _closeAttachPanel();
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        if (mounted) _showAttachError('Turn on location services to share your location.');
+        return;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        if (mounted) _showAttachError('Location permission denied.');
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
+      ).timeout(const Duration(seconds: 15));
+      await _sendStructuredMessage(
+        type: 'location',
+        content: '📍 Current location',
+        metadata: {'lat': pos.latitude, 'lng': pos.longitude},
+      );
+    } catch (_) {
+      if (mounted) _showAttachError('Could not get your location.');
+    }
+  }
+
+  Future<void> _pickContact() async {
+    _closeAttachPanel();
+    try {
+      if (!await FlutterContacts.requestPermission()) {
+        if (mounted) _showAttachError('Contacts permission denied.');
+        return;
+      }
+      final picked = await FlutterContacts.openExternalPick();
+      if (picked == null || !mounted) return;
+      final full = await FlutterContacts.getContact(picked.id, withProperties: true);
+      final name = full?.displayName ?? picked.displayName;
+      final phone = (full?.phones.isNotEmpty ?? false) ? full!.phones.first.number : null;
+      await _sendStructuredMessage(
+        type: 'contact',
+        content: '👤 $name',
+        metadata: {'name': name, if (phone != null) 'phone': phone},
+      );
+    } catch (_) {
+      if (mounted) _showAttachError('Could not share that contact.');
+    }
+  }
+
+  Future<void> _pickAudio() async {
+    _closeAttachPanel();
+    if (!await _audioRecorder.hasPermission()) {
+      if (mounted) _showAttachError('Microphone permission denied.');
+      return;
+    }
+    final dir = await getTemporaryDirectory();
+    final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    await _audioRecorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+    if (!mounted) return;
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isDismissible: false,
+      backgroundColor: Colors.transparent,
+      builder: (_) => RecordingSheet(recorder: _audioRecorder),
+    );
+    if (result == null) return; // cancelled — recorder already stopped+discarded by the sheet
+    await _sendAttachmentFile(File(result), type: 'audio', pendingLabel: '🎤 Voice message');
+  }
+
+  Future<void> _voteOnPoll(Message msg, int optionIndex) async {
+    final options = ((msg.metadata['options'] as List?) ?? []).cast<Map<String, dynamic>>();
+    if (optionIndex < 0 || optionIndex >= options.length) return;
+    final myId = widget.user.id;
+    final alreadyOnThis = ((options[optionIndex]['votes'] as List?) ?? []).contains(myId);
+    setState(() {
+      for (var i = 0; i < options.length; i++) {
+        final votes = ((options[i]['votes'] as List?) ?? []).cast<String>().toList();
+        votes.remove(myId);
+        if (i == optionIndex && !alreadyOnThis) votes.add(myId);
+        options[i]['votes'] = votes;
+      }
+    });
+    try {
+      await http.post(
+        Uri.parse('http://${Config.baseUrl}/api/v1/messages/${widget.roomId}/${msg.id}/vote'),
+        headers: {'Authorization': 'Bearer ${widget.token}', 'Content-Type': 'application/json'},
+        body: jsonEncode({'optionIndex': optionIndex}),
+      ).timeout(const Duration(seconds: 10));
+    } catch (_) {
+      // Best-effort — a live 'message_voted' socket event (or the next
+      // history reload) reconciles this with the server's truth either way.
+    }
+  }
+
+  Future<void> _createPoll() async {
+    _closeAttachPanel();
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const PollComposerSheet(),
+    );
+    if (result == null) return;
+    await _sendStructuredMessage(
+      type: 'poll',
+      content: '📊 ${result['question']}',
+      metadata: {'question': result['question'], 'options': result['options']},
+    );
+  }
+
+  Future<void> _createEvent() async {
+    _closeAttachPanel();
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const EventComposerSheet(),
+    );
+    if (result == null) return;
+    await _sendStructuredMessage(
+      type: 'event',
+      content: '📅 ${result['title']}',
+      metadata: {'title': result['title'], 'startsAt': result['startsAt'], if (result['location'] != null) 'location': result['location']},
+    );
+  }
+
+  void _showAttachError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      margin: const EdgeInsets.all(16),
+    ));
+  }
+
   void _showWallpaperPicker() {
     showModalBottomSheet(
       context: context,
@@ -720,16 +976,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       (idx / _messages.length) * _scrollCtrl.position.maxScrollExtent,
       duration: const Duration(milliseconds: 400), curve: Curves.easeOut,
     );
-  }
-
-  void _comingSoon(String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('$feature coming soon'),
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      margin: const EdgeInsets.all(16),
-      backgroundColor: AppColors.brand,
-    ));
   }
 
   void _showMessageOptions(BuildContext context, Message msg) {
@@ -883,6 +1129,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     // indicator hangs until its own timeout fires.
     _presenceSocket?.emit('stop_typing', {'roomId': widget.roomId, 'userId': widget.user.id});
     _socket?.disconnect(); _presenceSocket?.disconnect();
+    _audioRecorder.dispose();
     super.dispose();
   }
 
@@ -939,12 +1186,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     child: AttachmentPanel(
                       onGallery: _pickGallery,
                       onCamera: _pickCamera,
-                      onLocation: () { _closeAttachPanel(); _comingSoon('Location sharing'); },
-                      onContact: () { _closeAttachPanel(); _comingSoon('Contact sharing'); },
-                      onDocument: () { _closeAttachPanel(); _comingSoon('Document sharing'); },
-                      onPoll: () { _closeAttachPanel(); _comingSoon('Poll creation'); },
-                      onEvent: () { _closeAttachPanel(); _comingSoon('Event creation'); },
-                      onAudio: () { _closeAttachPanel(); _comingSoon('Audio recording'); },
+                      onLocation: _pickLocation,
+                      onContact: _pickContact,
+                      onDocument: _pickDocument,
+                      onPoll: _createPoll,
+                      onEvent: _createEvent,
+                      onAudio: _pickAudio,
                       onMediaTap: _sendMediaAsset,
                     ),
                   )
@@ -1195,6 +1442,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                         )
                       : msg.isImage
                       ? _buildImageBubbleContent(context, msg, isMe, sameSenderAsPrev)
+                      : msg.isSpecial
+                      ? SpecialBubbleContent(
+                          msg: msg,
+                          isMe: isMe,
+                          currentUserId: widget.user.id,
+                          onVote: msg.isPoll ? (i) => _voteOnPoll(msg, i) : null,
+                        )
                       : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

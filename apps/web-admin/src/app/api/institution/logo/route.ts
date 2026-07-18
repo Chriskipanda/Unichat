@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-const BASE = process.env.AUTH_SERVICE_URL ?? "http://localhost";
+const MEDIA = process.env.MEDIA_SERVICE_URL ?? "http://localhost";
 const MAX_BYTES = 2 * 1024 * 1024;
 
 export async function POST(request: Request) {
@@ -15,8 +15,9 @@ export async function POST(request: Request) {
   }
 
   const formData = await request.formData();
-  const upstream = await fetch(`${BASE}/api/v1/media/upload/logo`, {
+  const upstream = await fetch(`${MEDIA}/api/v1/media/upload/logo`, {
     method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
     body: formData,
   });
   const data = await upstream.json();

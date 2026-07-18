@@ -17,6 +17,11 @@ fastify.register(require('@fastify/multipart'), {
 const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
+// The URL handed back to clients must be reachable from wherever the
+// browser/app actually is — "localhost" only resolves on the server itself.
+// Set to the gateway's public address in production (see docker-compose.vps.yml).
+const PUBLIC_MEDIA_URL = process.env.PUBLIC_MEDIA_URL || 'http://localhost';
+
 // Static files served at /api/v1/media/uploads/* — matches the nginx proxy path
 fastify.register(require('@fastify/static'), {
   root: uploadsDir,
@@ -49,7 +54,7 @@ fastify.post('/api/v1/media/upload', { preHandler: bearerAuth }, async (req, rep
   const filename = `${crypto.randomUUID()}${ext}`;
   const filePath = path.join(uploadsDir, filename);
   await pipeline(data.file, fs.createWriteStream(filePath));
-  return { url: `http://localhost/api/v1/media/uploads/${filename}`, type: data.mimetype, name: data.filename };
+  return { url: `${PUBLIC_MEDIA_URL}/api/v1/media/uploads/${filename}`, type: data.mimetype, name: data.filename };
 });
 
 // Logo upload — images only, 2MB enforced after read
@@ -90,7 +95,7 @@ fastify.post('/api/v1/media/upload/logo', { preHandler: bearerAuth }, async (req
   const filename = `logo-${Date.now()}.${ext}`;
   fs.writeFileSync(path.join(uploadsDir, filename), Buffer.concat(chunks));
 
-  return { url: `http://localhost/api/v1/media/uploads/${filename}` };
+  return { url: `${PUBLIC_MEDIA_URL}/api/v1/media/uploads/${filename}` };
 });
 
 const start = async () => {
