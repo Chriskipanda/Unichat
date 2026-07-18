@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 // Context extension — theme-aware color lookups.
 // Use context.cl.bg instead of AppColors.bgMain so screens adapt to light/dark.
@@ -26,35 +25,10 @@ class AppColorSet {
 }
 
 class Config {
-  // Runtime-editable — persisted in SharedPreferences under key 'server_url'.
-  // Falls back to the hardcoded default if nothing is saved.
-  // Default points at the always-on VPS backend, so a fresh install (e.g. the
-  // APK handed to a tester) connects with no setup. A user can still override
-  // it in the server picker — a saved value wins over this — so local dev
-  // against 'localhost' keeps working once entered.
-  static String _baseUrl = '169.58.31.132';
-  static String get baseUrl => _baseUrl;
-
-  /// Load the saved server URL from storage (call once at startup).
-  static Future<void> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString('server_url');
-    if (saved != null && saved.trim().isNotEmpty) {
-      _baseUrl = saved.trim();
-    }
-  }
-
-  /// Persist a new server URL so it survives app restarts.
-  static Future<void> setBaseUrl(String url) async {
-    final trimmed = url.trim();
-    if (trimmed.isEmpty) return;
-    _baseUrl = trimmed;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('server_url', trimmed);
-  }
-
-  /// The hardcoded fallback, shown as placeholder in the picker.
-  static const String defaultUrl = '169.58.31.132';
+  // Always the production VPS — this app has one backend, so there's nothing
+  // to pick. (Previously runtime-editable via a server picker on the
+  // institution-selection screen; removed once the address stopped changing.)
+  static const String baseUrl = '169.58.31.132';
   static const String appName = 'UniChat';
 }
 

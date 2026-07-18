@@ -39,8 +39,6 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _checkSession() async {
-    // Load saved server URL and chat theme before anything hits the network
-    await Config.load();
     await ChatThemeService.init();
 
     final prefs = await SharedPreferences.getInstance();

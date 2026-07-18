@@ -33,8 +33,7 @@ class _TenantScreenState extends State<TenantScreen>
     _slide = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
     _ctrl.forward();
-    // Load saved server URL then fetch institutions
-    Config.load().then((_) { if (mounted) _loadInstitutions(); });
+    _loadInstitutions();
   }
 
   Future<void> _loadInstitutions() async {
@@ -154,171 +153,10 @@ class _TenantScreenState extends State<TenantScreen>
                         onTap: _selected != null ? _proceed : null,
                       ),
                     ),
-                    // ── Server picker ──────────────────────────────
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                      child: Semantics(
-                        label: 'Server: ${Config.baseUrl}. Tap to change server address.',
-                        button: true,
-                        child: Material(
-                          color: context.cl.card,
-                          borderRadius: BorderRadius.circular(12),
-                          child: InkWell(
-                            onTap: _showServerPicker,
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: context.cl.divider),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.dns_rounded, size: 16, color: context.cl.textHint),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      'Server: ${Config.baseUrl}',
-                                      style: TextStyle(fontSize: 12, color: context.cl.textSec),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  Icon(Icons.edit_rounded, size: 14, color: context.cl.textHint),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showServerPicker() {
-    final ctrl = TextEditingController(text: Config.baseUrl);
-    // Common presets for different scenarios
-    final presets = <(String, String)>[
-      ('Local WiFi', Config.defaultUrl),
-      ('Android Emulator', '10.0.2.2:3000'),
-      ('iOS Simulator', 'localhost:3000'),
-      ('Localhost (USB)', '127.0.0.1:3000'),
-    ];
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: context.cl.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(children: [
-          Icon(Icons.dns_rounded, color: AppColors.brand, size: 22),
-          const SizedBox(width: 8),
-          Text('Server Address',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.cl.text)),
-        ]),
-        content: StatefulBuilder(
-          builder: (ctx, setDialog) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Enter host:port (no http://)',
-                style: TextStyle(fontSize: 12, color: context.cl.textHint)),
-              const SizedBox(height: 10),
-              // Text input
-              Container(
-                decoration: BoxDecoration(
-                  color: context.cl.card,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: context.cl.divider),
-                ),
-                child: TextField(
-                  controller: ctrl,
-                  autofocus: true,
-                  style: TextStyle(color: context.cl.text, fontSize: 14, fontFamily: 'monospace'),
-                  decoration: InputDecoration(
-                    hintText: Config.defaultUrl,
-                    hintStyle: TextStyle(color: context.cl.textHint),
-                    prefixIcon: Icon(Icons.link_rounded, color: AppColors.brand, size: 18),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              // Quick presets
-              Text('Quick presets',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                    color: context.cl.textHint, letterSpacing: 0.4)),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6, runSpacing: 6,
-                children: presets.map(((String label, String url) p) {
-                  final isActive = ctrl.text.trim() == p.$2;
-                  return Material(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    child: InkWell(
-                      onTap: () => setDialog(() => ctrl.text = p.$2),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: isActive
-                              ? AppColors.brand.withValues(alpha: 0.15)
-                              : context.cl.card,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: isActive ? AppColors.brand : context.cl.divider,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(p.$1,
-                              style: TextStyle(
-                                fontSize: 10, fontWeight: FontWeight.w700,
-                                color: isActive ? AppColors.brand : context.cl.textSec,
-                              )),
-                            Text(p.$2,
-                              style: TextStyle(
-                                fontSize: 10, fontFamily: 'monospace',
-                                color: isActive ? AppColors.brand : context.cl.textHint,
-                              )),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: context.cl.textSec)),
-          ),
-          TextButton(
-            onPressed: () async {
-              final url = ctrl.text.trim();
-              if (url.isEmpty) return;
-              await Config.setBaseUrl(url);
-              if (!ctx.mounted) return;
-              Navigator.pop(ctx);
-              // Reload institutions with the new URL
-              if (mounted) setState(() { _institutions = []; _selected = null; });
-              _loadInstitutions();
-            },
-            child: const Text('Save & Reconnect',
-              style: TextStyle(color: AppColors.brand, fontWeight: FontWeight.w800)),
           ),
         ],
       ),
