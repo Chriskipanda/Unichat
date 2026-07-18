@@ -1024,11 +1024,18 @@ fastify.get('/api/v1/teacher/rooms/:roomId/members', { preHandler: teacherOnly }
   const group = await prisma.group.findFirst({ where: { id: roomId, tenantId } });
   if (!group) return reply.code(404).send({ error: 'Room not found' });
 
-  const [ownsAssignment, isMember] = await Promise.all([
-    prisma.teacherAssignment.findFirst({ where: { groupId: roomId, teacherId: userId, tenantId } }),
-    prisma.groupMember.findUnique({ where: { groupId_userId: { groupId: roomId, userId } } }),
-  ]);
-  const authorized = group.createdBy === userId || !!ownsAssignment || !!isMember;
+  // Clubs are tenant-wide by design (see /api/v1/student/clubs) — any
+  // teacher in the institution can monitor any club's membership, not just
+  // ones they created or joined. Class rooms stay ownership-gated: a
+  // teacher should not see the roster of another teacher's class.
+  let authorized = group.type === 'club';
+  if (!authorized) {
+    const [ownsAssignment, isMember] = await Promise.all([
+      prisma.teacherAssignment.findFirst({ where: { groupId: roomId, teacherId: userId, tenantId } }),
+      prisma.groupMember.findUnique({ where: { groupId_userId: { groupId: roomId, userId } } }),
+    ]);
+    authorized = group.createdBy === userId || !!ownsAssignment || !!isMember;
+  }
   if (!authorized) return reply.code(403).send({ error: 'Not authorized to view this room\'s roster' });
 
   const members = await prisma.groupMember.findMany({
