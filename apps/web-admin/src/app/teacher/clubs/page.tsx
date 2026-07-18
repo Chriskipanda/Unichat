@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Loader2, PartyPopper, Crown, Eye, Send } from "lucide-react";
+import { Plus, Trash2, Loader2, PartyPopper, Crown, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { RoomMembersDialog } from "@/components/teacher/RoomMembersDialog";
 import { SendToClassModal } from "@/components/teacher/SendToClassModal";
+import { RoomDetailTabs } from "@/components/teacher/RoomDetailTabs";
 
 const ACCENT = "var(--color-auth-teacher)";
 
@@ -90,26 +91,34 @@ export default function ClubsPage() {
   const [clubs, setClubs] = useState<Club[]>([]);
   const [clubsLoading, setClubsLoading] = useState(true);
   const [showAddClub, setShowAddClub] = useState(false);
-  const [rosterTarget, setRosterTarget] = useState<{ id: string; name: string } | null>(null);
-  const [sendTarget, setSendTarget] = useState<{ id: string; name: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const [selectedId, setSelectedId] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  async function loadClubs() {
+  async function loadClubs(preserveSelection = true) {
     setClubsLoading(true);
     const res = await fetch("/api/teacher/clubs");
     const data = await res.json();
-    setClubs(data.clubs ?? []);
+    const list: Club[] = data.clubs ?? [];
+    setClubs(list);
     setClubsLoading(false);
+    if (!preserveSelection || !list.some((c) => c.id === selectedId)) {
+      setSelectedId(list[0]?.id ?? "");
+    }
   }
 
   useEffect(() => {
-    loadClubs();
+    loadClubs(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function deleteClub(id: string) {
     if (!confirm("Delete this club? This removes it for every member.")) return;
     await fetch(`/api/teacher/clubs/${id}`, { method: "DELETE" });
-    loadClubs();
+    loadClubs(false);
   }
+
+  const selected = clubs.find((c) => c.id === selectedId) ?? null;
 
   return (
     <div className="space-y-6">
@@ -117,7 +126,10 @@ export default function ClubsPage() {
         <div className="flex items-center justify-between mb-4 gap-3">
           <div>
             <h2 className="text-title">Clubs</h2>
-            <p className="text-subtitle mt-0.5">Every club in your institution. Create one to open its chat room instantly.</p>
+            <p className="text-subtitle mt-0.5">
+              Every club in your institution. Pick one below to see its members and what&apos;s been sent to it, independently of every
+              other club.
+            </p>
           </div>
           <Button onClick={() => setShowAddClub(true)} className="shrink-0" style={{ backgroundColor: ACCENT }}>
             <Plus />
@@ -132,54 +144,69 @@ export default function ClubsPage() {
         ) : clubs.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground text-sm">No clubs yet. Create the first one for your institution.</div>
         ) : (
-          <div className="grid sm:grid-cols-2 gap-3">
-            {clubs.map((c) => (
-              <div key={c.id} className="border border-border rounded-xl p-4 flex flex-col gap-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <PartyPopper className="w-4 h-4 shrink-0" style={{ color: ACCENT }} />
-                    <p className="font-semibold text-foreground text-sm truncate">{c.name}</p>
-                  </div>
-                  {c.isOwner && (
-                    <Badge className="bg-[var(--warning)]/10 text-[var(--warning)] shrink-0">
+          <Select value={selectedId} onValueChange={(v) => v && setSelectedId(v)}>
+            <SelectTrigger className="w-full sm:w-96">
+              <SelectValue placeholder="Select a club…" />
+            </SelectTrigger>
+            <SelectContent>
+              {clubs.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name} {c.isOwner ? "(yours)" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </Card>
+
+      {selected && (
+        <Card className="p-6">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="flex items-start gap-2 min-w-0">
+              <PartyPopper className="w-5 h-5 shrink-0 mt-0.5" style={{ color: ACCENT }} />
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-foreground">{selected.name}</p>
+                  {selected.isOwner && (
+                    <Badge className="bg-[var(--warning)]/10 text-[var(--warning)]">
                       <Crown className="w-3 h-3" />
                       Yours
                     </Badge>
                   )}
                 </div>
-                {c.description && <p className="text-sm text-muted-foreground line-clamp-2">{c.description}</p>}
-                <div className="flex items-center justify-between mt-auto pt-2 flex-wrap gap-1">
-                  <p className="text-metadata">
-                    {c.memberCount} member{c.memberCount === 1 ? "" : "s"}
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => setSendTarget({ id: c.id, name: c.name })}>
-                      <Send className="w-3.5 h-3.5" />
-                      Send
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setRosterTarget({ id: c.id, name: c.name })}>
-                      <Eye className="w-3.5 h-3.5" />
-                      Members
-                    </Button>
-                    {c.isOwner && (
-                      <Button variant="ghost" size="icon-sm" className="hover:text-destructive" onClick={() => deleteClub(c.id)} title="Delete club">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
+                {selected.description && <p className="text-sm text-muted-foreground mt-0.5">{selected.description}</p>}
+                <p className="text-metadata mt-1">
+                  {selected.memberCount} member{selected.memberCount === 1 ? "" : "s"}
+                </p>
               </div>
-            ))}
+            </div>
+            <div className="flex gap-1 shrink-0">
+              <Button variant="outline" size="sm" onClick={() => setSending(true)}>
+                <Send className="w-3.5 h-3.5" />
+                Send
+              </Button>
+              {selected.isOwner && (
+                <Button variant="ghost" size="icon-sm" className="hover:text-destructive" onClick={() => deleteClub(selected.id)} title="Delete club">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              )}
+            </div>
           </div>
-        )}
-      </Card>
 
-      {showAddClub && <AddClubModal onClose={() => setShowAddClub(false)} onCreated={loadClubs} />}
-      {rosterTarget && (
-        <RoomMembersDialog roomId={rosterTarget.id} roomName={rosterTarget.name} onClose={() => setRosterTarget(null)} />
+          <div className="mt-5 pt-5 border-t border-border">
+            <RoomDetailTabs roomId={selected.id} refreshKey={refreshKey} />
+          </div>
+        </Card>
       )}
-      {sendTarget && (
-        <SendToClassModal roomId={sendTarget.id} roomName={sendTarget.name} onClose={() => setSendTarget(null)} onSent={() => {}} />
+
+      {showAddClub && <AddClubModal onClose={() => setShowAddClub(false)} onCreated={() => loadClubs(false)} />}
+      {sending && selected && (
+        <SendToClassModal
+          roomId={selected.id}
+          roomName={selected.name}
+          onClose={() => setSending(false)}
+          onSent={() => setRefreshKey((k) => k + 1)}
+        />
       )}
     </div>
   );

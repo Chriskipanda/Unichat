@@ -311,7 +311,7 @@ async function serializeExisting(existing) {
 // Types sendable through the plain (non-file) send route below — each is
 // just structured data in `metadata`, no upload involved. Media types
 // ('image'/'video'/'document'/'audio') only ever come from the /media route.
-const METADATA_MESSAGE_TYPES = ['text', 'location', 'contact', 'poll', 'event'];
+const METADATA_MESSAGE_TYPES = ['text', 'location', 'contact', 'poll', 'event', 'notice', 'assignment'];
 
 function validateMetadataForType(type, metadata) {
   if (type === 'poll') {
@@ -335,6 +335,22 @@ function validateMetadataForType(type, metadata) {
     const startsAt = metadata?.startsAt;
     if (!title || !startsAt || Number.isNaN(Date.parse(startsAt))) return null;
     return { title, startsAt, location: typeof metadata.location === 'string' ? metadata.location : null };
+  }
+  // Teacher-portal-only types — a plain announcement, and a homework post
+  // with optional due date. Kept as their own type (rather than folded into
+  // 'text') specifically so a room's assignments/notices can be queried
+  // independently via GET .../messages?type=assignment.
+  if (type === 'notice') {
+    return {};
+  }
+  if (type === 'assignment') {
+    const title = metadata?.title?.trim();
+    if (!title) return null;
+    return {
+      title,
+      instructions: typeof metadata.instructions === 'string' ? metadata.instructions : null,
+      dueDate: typeof metadata.dueDate === 'string' ? metadata.dueDate : null,
+    };
   }
   return {};
 }
@@ -581,7 +597,7 @@ fastify.get('/api/v1/messages/:groupId/search', { preHandler: bearerAuth }, asyn
 fastify.get('/api/v1/messages/:groupId', { preHandler: bearerAuth }, async (request, reply) => {
   const { groupId } = request.params;
   const { userId } = request.user;
-  const { limit = '60', before } = request.query || {};
+  const { limit = '60', before, type } = request.query || {};
 
   if (!(await isRoomMember(groupId, userId))) {
     return reply.code(403).send({ error: 'Not a member of this room' });
@@ -591,6 +607,10 @@ fastify.get('/api/v1/messages/:groupId', { preHandler: bearerAuth }, async (requ
     where: {
       groupId,
       ...(before ? { createdAt: { lt: new Date(before) } } : {}),
+      // Lets a client pull just this room's assignments or notices
+      // independently of the general chat history (e.g. the teacher
+      // portal's per-class Assignments/Notices tabs).
+      ...(type ? { type } : {}),
     },
     orderBy: { createdAt: 'asc' },
     take: Math.min(parseInt(limit) || 60, 200),
@@ -606,6 +626,7 @@ fastify.get('/api/v1/messages/:groupId', { preHandler: bearerAuth }, async (requ
     messages: messages.map(m => ({
       id: m.id,
       content: m.deletedAt ? '' : m.content,
+      metadata: m.metadata ?? {},
       deleted: !!m.deletedAt,
       senderId: m.senderId,
       senderName: m.sender?.fullName ?? 'Unknown',

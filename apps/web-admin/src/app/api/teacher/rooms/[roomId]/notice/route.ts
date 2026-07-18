@@ -18,7 +18,7 @@ export async function POST(
   const upstream = await fetch(`${MESSAGING}/api/v1/messages/${roomId}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ content, clientMessageId: randomUUID() }),
+    body: JSON.stringify({ content, type: "notice", metadata: {}, clientMessageId: randomUUID() }),
   });
   const data = await upstream.json();
   return NextResponse.json(data, { status: upstream.status });

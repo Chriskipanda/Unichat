@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { RoomMembersDialog } from "@/components/teacher/RoomMembersDialog";
 import { SendToClassModal } from "@/components/teacher/SendToClassModal";
+import { RoomDetailTabs } from "@/components/teacher/RoomDetailTabs";
 
 const ACCENT = "var(--color-auth-teacher)";
 
@@ -305,19 +305,25 @@ export default function AcademicsPage() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [crTarget, setCrTarget] = useState<Assignment | null>(null);
-  const [rosterTarget, setRosterTarget] = useState<{ id: string; name: string } | null>(null);
-  const [sendTarget, setSendTarget] = useState<{ id: string; name: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const [selectedId, setSelectedId] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  async function load() {
+  async function load(preserveSelection = true) {
     setLoading(true);
     const res = await fetch("/api/teacher/me");
     const data = await res.json();
-    setAssignments(data.assignments ?? []);
+    const list: Assignment[] = data.assignments ?? [];
+    setAssignments(list);
     setLoading(false);
+    if (!preserveSelection || !list.some((a) => a.id === selectedId)) {
+      setSelectedId(list[0]?.id ?? "");
+    }
   }
 
   useEffect(() => {
-    load();
+    load(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function removeAssignment(id: string) {
@@ -328,7 +334,7 @@ export default function AcademicsPage() {
     )
       return;
     await fetch(`/api/teacher/assignments/${id}`, { method: "DELETE" });
-    load();
+    load(false);
   }
 
   async function removeCr(id: string) {
@@ -345,15 +351,17 @@ export default function AcademicsPage() {
     );
   }
 
+  const selected = assignments.find((a) => a.id === selectedId) ?? null;
+
   return (
     <div className="space-y-6">
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4 gap-3">
           <div>
-            <h2 className="text-title">Courses I Teach</h2>
+            <h2 className="text-title">Academics</h2>
             <p className="text-subtitle mt-0.5">
-              Register a module you teach + its programme and NTA level — this creates that class&apos;s chat room. Track who&apos;s
-              joined, assign a Class Rep, and send notices or assignments straight to the class.
+              Register a module you teach + its programme and NTA level — this creates that class&apos;s chat room. Pick a class below
+              to see who&apos;s joined and what&apos;s been sent to it, independently of every other class.
             </p>
           </div>
           <Button onClick={() => setShowAdd(true)} className="shrink-0" style={{ backgroundColor: ACCENT }}>
@@ -367,81 +375,92 @@ export default function AcademicsPage() {
             No course assignments yet. Add the course and NTA level you teach to get started.
           </div>
         ) : (
-          <div className="space-y-3">
-            {assignments.map((a) => (
-              <div key={a.id} className="border border-border rounded-xl p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-foreground text-sm">
-                      {a.moduleName ?? <span className="italic text-muted-foreground font-normal">Untitled module — remove and re-add to name it</span>}
-                    </p>
-                    <p className="text-metadata">
-                      {a.course.name} · {a.course.department.name} · {a.ntaLevel}
-                    </p>
-                    {a.group && (
-                      <button
-                        type="button"
-                        onClick={() => setRosterTarget({ id: a.group!.id, name: a.moduleName ?? a.course.name })}
-                        className="text-xs mt-1 flex items-center gap-1 hover:underline"
-                        style={{ color: ACCENT }}
-                      >
-                        <MessageCircle className="w-3.5 h-3.5" />
-                        Class room · {a.group._count.members} member{a.group._count.members === 1 ? "" : "s"} — view roster
-                      </button>
-                    )}
-                  </div>
-                  <Button variant="ghost" size="icon-sm" className="hover:text-destructive shrink-0" onClick={() => removeAssignment(a.id)} title="Remove assignment">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-
-                <div className="mt-3 pt-3 border-t border-border flex items-center justify-between flex-wrap gap-2">
-                  {a.cr ? (
-                    <div>
-                      <p className="text-metadata">Class Rep</p>
-                      <p className="text-sm font-medium text-foreground">
-                        {a.cr.fullName} <span className="text-muted-foreground font-normal">{a.cr.studentId ? `· ${a.cr.studentId}` : ""}</span>
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No Class Rep assigned</p>
-                  )}
-                  <div className="flex gap-1 shrink-0 flex-wrap">
-                    {a.group && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSendTarget({ id: a.group!.id, name: a.moduleName ?? a.course.name })}
-                        style={{ color: ACCENT }}
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                        Send
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="sm" onClick={() => setCrTarget(a)} style={{ color: ACCENT }}>
-                      <Users className="w-3.5 h-3.5" />
-                      {a.cr ? "Change" : "Assign CR"}
-                    </Button>
-                    {a.cr && (
-                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => removeCr(a.id)}>
-                        Remove
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <Select value={selectedId} onValueChange={(v) => v && setSelectedId(v)}>
+            <SelectTrigger className="w-full sm:w-96">
+              <SelectValue placeholder="Select a class…" />
+            </SelectTrigger>
+            <SelectContent>
+              {assignments.map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  {a.moduleName ?? "Untitled module"} — {a.course.name} · {a.ntaLevel}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
       </Card>
 
-      {showAdd && <AddAssignmentModal onClose={() => setShowAdd(false)} onCreated={load} />}
-      {crTarget && <AssignCrModal assignment={crTarget} onClose={() => setCrTarget(null)} onAssigned={load} />}
-      {rosterTarget && (
-        <RoomMembersDialog roomId={rosterTarget.id} roomName={rosterTarget.name} onClose={() => setRosterTarget(null)} />
+      {selected && (
+        <Card className="p-6">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <p className="font-semibold text-foreground">
+                {selected.moduleName ?? <span className="italic text-muted-foreground font-normal">Untitled module</span>}
+              </p>
+              <p className="text-metadata">
+                {selected.course.name} · {selected.course.department.name} · {selected.ntaLevel}
+              </p>
+              {selected.group && (
+                <p className="text-xs mt-1 flex items-center gap-1" style={{ color: ACCENT }}>
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  Class room · {selected.group._count.members} member{selected.group._count.members === 1 ? "" : "s"}
+                </p>
+              )}
+              <p className="text-sm mt-2">
+                {selected.cr ? (
+                  <>
+                    <span className="text-muted-foreground">Class Rep: </span>
+                    <span className="font-medium text-foreground">{selected.cr.fullName}</span>
+                    {selected.cr.studentId && <span className="text-muted-foreground"> · {selected.cr.studentId}</span>}
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">No Class Rep assigned</span>
+                )}
+              </p>
+            </div>
+            <div className="flex gap-1 shrink-0 flex-wrap">
+              {selected.group && (
+                <Button variant="outline" size="sm" onClick={() => setSending(true)}>
+                  <Send className="w-3.5 h-3.5" />
+                  Send
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => setCrTarget(selected)} style={{ color: ACCENT }}>
+                <Users className="w-3.5 h-3.5" />
+                {selected.cr ? "Change CR" : "Assign CR"}
+              </Button>
+              {selected.cr && (
+                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => removeCr(selected.id)}>
+                  Remove CR
+                </Button>
+              )}
+              <Button variant="ghost" size="icon-sm" className="hover:text-destructive" onClick={() => removeAssignment(selected.id)} title="Remove assignment">
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          {selected.group ? (
+            <div className="mt-5 pt-5 border-t border-border">
+              <RoomDetailTabs roomId={selected.group.id} refreshKey={refreshKey} />
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground mt-5 pt-5 border-t border-border">
+              This assignment has no class room yet — remove and re-add it to create one.
+            </p>
+          )}
+        </Card>
       )}
-      {sendTarget && (
-        <SendToClassModal roomId={sendTarget.id} roomName={sendTarget.name} onClose={() => setSendTarget(null)} onSent={() => {}} />
+
+      {showAdd && <AddAssignmentModal onClose={() => setShowAdd(false)} onCreated={() => load(false)} />}
+      {crTarget && <AssignCrModal assignment={crTarget} onClose={() => setCrTarget(null)} onAssigned={load} />}
+      {sending && selected?.group && (
+        <SendToClassModal
+          roomId={selected.group.id}
+          roomName={selected.moduleName ?? selected.course.name}
+          onClose={() => setSending(false)}
+          onSent={() => setRefreshKey((k) => k + 1)}
+        />
       )}
     </div>
   );

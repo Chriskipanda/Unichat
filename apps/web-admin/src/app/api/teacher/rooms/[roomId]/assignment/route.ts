@@ -33,7 +33,12 @@ export async function POST(
   const textRes = await fetch(`${MESSAGING}/api/v1/messages/${roomId}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ content: lines.join("\n"), clientMessageId: randomUUID() }),
+    body: JSON.stringify({
+      content: lines.join("\n"),
+      type: "assignment",
+      metadata: { title, instructions: instructions || null, dueDate: dueDate || null },
+      clientMessageId: randomUUID(),
+    }),
   });
   const textData = await textRes.json();
   if (!textRes.ok) return NextResponse.json(textData, { status: textRes.status });
