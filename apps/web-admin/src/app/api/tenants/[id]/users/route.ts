@@ -9,14 +9,15 @@ async function getToken() {
 }
 
 export async function GET(
-  _request: Request,
-  ctx: RouteContext<"/api/tenants/[id]">
+  request: Request,
+  ctx: RouteContext<"/api/tenants/[id]/users">
 ) {
   const { id } = await ctx.params;
   const token = await getToken();
+  const { search } = new URL(request.url);
 
   try {
-    const res = await fetch(`${AUTH}/api/v1/admin/tenants/${id}`, {
+    const res = await fetch(`${AUTH}/api/v1/admin/tenants/${id}/users${search}`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });
@@ -27,40 +28,21 @@ export async function GET(
   }
 }
 
-export async function PATCH(
+export async function POST(
   request: Request,
-  ctx: RouteContext<"/api/tenants/[id]">
+  ctx: RouteContext<"/api/tenants/[id]/users">
 ) {
   const { id } = await ctx.params;
   const token = await getToken();
-  const body = await request.json().catch(() => ({}));
+  const body = await request.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
 
   try {
-    const res = await fetch(`${AUTH}/api/v1/admin/tenants/${id}`, {
-      method: "PATCH",
+    const res = await fetch(`${AUTH}/api/v1/admin/tenants/${id}/users`, {
+      method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
-  } catch {
-    return NextResponse.json({ error: "Auth service unreachable" }, { status: 503 });
-  }
-}
-
-export async function DELETE(
-  _request: Request,
-  ctx: RouteContext<"/api/tenants/[id]">
-) {
-  const { id } = await ctx.params;
-  const token = await getToken();
-
-  try {
-    const res = await fetch(`${AUTH}/api/v1/admin/tenants/${id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.status === 204) return new Response(null, { status: 204 });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
   } catch {

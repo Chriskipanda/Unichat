@@ -1,147 +1,201 @@
 "use client";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
 
-const NAV = [
-  {
-    href: "/dashboard",
-    label: "Overview",
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-      </svg>
-    ),
-  },
-  {
-    href: "/dashboard/institutions",
-    label: "Institutions",
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-      </svg>
-    ),
-  },
-  {
-    href: "/dashboard/plans",
-    label: "Plans",
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-      </svg>
-    ),
-  },
-  {
-    href: "/dashboard/settings",
-    label: "Settings",
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    ),
-  },
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useTheme } from "next-themes";
+import {
+  LayoutDashboard,
+  Building2,
+  Wallet,
+  Settings,
+  LogOut,
+  Menu,
+  Sun,
+  Moon,
+  ChevronsUpDown,
+} from "lucide-react";
+import { LogoMark } from "@/components/auth/icons";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
+const ACCENT = "var(--color-auth-super)";
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+const nav: NavItem[] = [
+  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/dashboard/institutions", label: "Institutions", icon: Building2 },
+  { href: "/dashboard/plans", label: "Plans", icon: Wallet },
+  { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
+
+function SidebarNav({ isActive, onNavigate }: { isActive: (href: string) => boolean; onNavigate?: () => void }) {
+  return (
+    <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+      {nav.map((item) => {
+        const active = isActive(item.href);
+        const Icon = item.icon;
+        return (
+          <a
+            key={item.href}
+            href={item.href}
+            onClick={onNavigate}
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+            style={
+              active
+                ? { backgroundColor: ACCENT, color: "#ffffff" }
+                : undefined
+            }
+          >
+            <Icon
+              className={`w-4.5 h-4.5 shrink-0 ${active ? "" : "text-sidebar-foreground/70"}`}
+            />
+            <span className={active ? "" : "text-sidebar-foreground/70"}>{item.label}</span>
+          </a>
+        );
+      })}
+    </nav>
+  );
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  const currentPage =
-    NAV.find((n) => n.href !== "/dashboard" && pathname.startsWith(n.href))?.label ??
-    (pathname === "/dashboard" ? "Overview" : "Dashboard");
+  useEffect(() => setMounted(true), []);
 
-  const handleLogout = async () => {
+  async function handleSignOut() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
-  };
+  }
+
+  const isActive = (href: string) => (href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href));
+  const activeLabel = nav.find((n) => isActive(n.href))?.label ?? "Dashboard";
 
   return (
-    <div className="flex h-screen bg-green-50 overflow-hidden">
-      {/* ── Sidebar ───────────────────────────────────── */}
-      <aside className="w-60 bg-green-950 flex flex-col shrink-0 overflow-y-auto">
-        {/* Brand */}
-        <div className="px-5 py-5 border-b border-green-900">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-green-600 flex items-center justify-center shrink-0">
-              <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="currentColor">
-                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-white font-bold text-sm leading-tight">UniChat</p>
-              <p className="text-green-500 text-xs">Enterprise</p>
-            </div>
+    <div className="flex h-screen bg-muted/30 overflow-hidden">
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex w-64 shrink-0 flex-col bg-sidebar border-r border-sidebar-border">
+        <div className="flex items-center gap-2.5 px-5 py-5 border-b border-sidebar-border">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: ACCENT }}>
+            <LogoMark className="w-4 h-4 text-white" />
+          </div>
+          <div className="overflow-hidden">
+            <p className="text-sidebar-foreground text-sm font-semibold truncate">UniChat</p>
+            <p className="text-sidebar-foreground/50 text-xs">Platform Console</p>
           </div>
         </div>
 
-        {/* Role pill */}
-        <div className="px-5 py-3 border-b border-green-900">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            <span className="text-green-400 text-xs font-medium">SuperAdmin</span>
-          </div>
-        </div>
+        <SidebarNav isActive={isActive} />
 
-        {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
-          <p className="text-green-700 text-xs font-semibold uppercase tracking-widest px-3 mb-3">
-            Platform
-          </p>
-          {NAV.map((item) => {
-            const active =
-              item.href === "/dashboard"
-                ? pathname === "/dashboard"
-                : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  active
-                    ? "bg-green-800 text-white shadow-sm"
-                    : "text-green-400 hover:bg-green-900/80 hover:text-green-200"
-                }`}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-                {active && (
-                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-green-400" />
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Sign out */}
-        <div className="px-3 py-4 border-t border-green-900">
+        <div className="px-3 pb-4">
           <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-green-500 hover:bg-green-900/80 hover:text-red-400 transition-all"
+            onClick={handleSignOut}
+            className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            <span>Sign Out</span>
+            <LogOut className="w-4.5 h-4.5" />
+            Sign out
           </button>
         </div>
       </aside>
 
-      {/* ── Main ─────────────────────────────────────── */}
+      {/* Mobile sidebar */}
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent side="left" className="w-64 p-0 bg-sidebar border-sidebar-border" showCloseButton={false}>
+          <SheetTitle className="sr-only">Navigation</SheetTitle>
+          <div className="flex items-center gap-2.5 px-5 py-5 border-b border-sidebar-border">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: ACCENT }}>
+              <LogoMark className="w-4 h-4 text-white" />
+            </div>
+            <div className="overflow-hidden">
+              <p className="text-sidebar-foreground text-sm font-semibold truncate">UniChat</p>
+              <p className="text-sidebar-foreground/50 text-xs">Platform Console</p>
+            </div>
+          </div>
+          <SidebarNav isActive={isActive} onNavigate={() => setMobileOpen(false)} />
+          <div className="px-3 pb-4">
+            <button
+              onClick={handleSignOut}
+              className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+            >
+              <LogOut className="w-4.5 h-4.5" />
+              Sign out
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top bar */}
-        <header className="bg-white border-b border-green-100 px-8 py-4 flex items-center justify-between shrink-0">
-          <div>
-            <h1 className="text-green-950 font-bold text-base">{currentPage}</h1>
-            <p className="text-green-400 text-xs">UniChat Platform Administration</p>
+        <header className="bg-header border-b border-border px-4 sm:px-6 py-3.5 flex items-center gap-3 shrink-0">
+          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
+            <Menu className="w-5 h-5" />
+          </Button>
+
+          <h1 className="text-title flex-1">{activeLabel}</h1>
+
+          <div
+            className="hidden sm:flex items-center gap-2 rounded-full px-3.5 py-1.5 border"
+            style={{ backgroundColor: `${ACCENT}1a`, borderColor: `${ACCENT}33` }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: ACCENT }} />
+            <span className="text-xs font-semibold" style={{ color: ACCENT }}>
+              Platform Online
+            </span>
           </div>
-          <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-full px-4 py-1.5">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-green-700 text-xs font-semibold">Platform Online</span>
-          </div>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Toggle theme"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            {mounted && theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button className="flex items-center gap-2 rounded-lg pl-1 pr-2 py-1 hover:bg-muted transition-colors">
+                  <Avatar className="size-7">
+                    <AvatarFallback className="text-xs font-semibold" style={{ backgroundColor: `${ACCENT}1a`, color: ACCENT }}>
+                      SA
+                    </AvatarFallback>
+                  </Avatar>
+                  <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground hidden sm:block" />
+                </button>
+              }
+            />
+            <DropdownMenuContent align="end" className="w-56">
+              <div className="px-1.5 py-1.5">
+                <p className="text-sm font-medium truncate">UniChat Enterprise</p>
+                <p className="text-xs text-muted-foreground">Platform SuperAdmin</p>
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut} variant="destructive">
+                <LogOut />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
       </div>
     </div>
   );

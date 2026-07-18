@@ -1,6 +1,13 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Building2, Users, TrendingUp, Crown, ArrowRight, Loader2 } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+
+const ACCENT = "var(--color-auth-super)";
 
 type Stats = {
   totalTenants: number;
@@ -19,37 +26,39 @@ type Tenant = {
   createdAt: string;
 };
 
-function PlanBadge({ plan }: { plan: string }) {
-  const s: Record<string, string> = {
-    starter: "bg-green-100 text-green-700 border border-green-200",
-    growth: "bg-green-200 text-green-800 border border-green-300",
-    enterprise: "bg-green-700 text-white border border-green-700",
-  };
-  return (
-    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${s[plan] ?? s.starter}`}>
-      {plan}
-    </span>
-  );
+const PLAN_BADGE: Record<string, string> = {
+  starter: "bg-[var(--info)]/10 text-[var(--info)]",
+  growth: "bg-[var(--chart-3)]/10 text-[var(--chart-3)]",
+  enterprise: "bg-primary/10 text-primary",
+};
+
+const STATUS_BADGE: Record<string, string> = {
+  active: "bg-[var(--success)]/10 text-[var(--success)]",
+  pending: "bg-[var(--warning)]/10 text-[var(--warning)]",
+  suspended: "bg-destructive/10 text-destructive",
+  inactive: "bg-muted text-muted-foreground",
+};
+
+interface StatCardProps {
+  label: string;
+  value: number | string;
+  sub?: string;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  color: string;
 }
 
-function StatusDot({ status }: { status: string }) {
-  const dot: Record<string, string> = {
-    active: "bg-green-500",
-    pending: "bg-yellow-400",
-    suspended: "bg-red-500",
-    inactive: "bg-gray-400",
-  };
-  const text: Record<string, string> = {
-    active: "text-green-700",
-    pending: "text-yellow-700",
-    suspended: "text-red-700",
-    inactive: "text-gray-600",
-  };
+function StatCard({ label, value, sub, icon: Icon, color }: StatCardProps) {
   return (
-    <span className={`flex items-center gap-1.5 text-xs font-medium capitalize ${text[status] ?? text.inactive}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${dot[status] ?? dot.inactive}`} />
-      {status}
-    </span>
+    <Card className="p-4 gap-1">
+      <div className="flex items-center justify-between">
+        <p className="text-metadata font-medium">{label}</p>
+        <div className="w-7 h-7 rounded-md flex items-center justify-center" style={{ backgroundColor: `${color}1a` }}>
+          <Icon className="w-3.5 h-3.5" style={{ color }} />
+        </div>
+      </div>
+      <p className="text-2xl font-bold tracking-tight text-foreground mt-1">{value}</p>
+      {sub && <p className="text-metadata mt-0.5">{sub}</p>}
+    </Card>
   );
 }
 
@@ -73,155 +82,102 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-green-200 border-t-green-600 rounded-full animate-spin" />
+        <Loader2 className="w-6 h-6 animate-spin" style={{ color: ACCENT }} />
       </div>
     );
   }
 
   return (
     <div className="space-y-6 max-w-7xl">
-      {/* ── Stats grid ─────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          {
-            label: "Active Institutions",
-            value: stats?.activeTenants ?? 0,
-            bg: "bg-gradient-to-br from-green-700 to-green-600",
-            sub: `${stats?.totalTenants ?? 0} total`,
-          },
-          {
-            label: "Total Users",
-            value: stats?.totalUsers ?? 0,
-            bg: "bg-gradient-to-br from-green-800 to-green-700",
-            sub: "across all institutions",
-          },
-          {
-            label: "Growth Plan",
-            value: stats?.planBreakdown.growth ?? 0,
-            bg: "bg-gradient-to-br from-green-900 to-green-800",
-            sub: "institutions",
-          },
-          {
-            label: "Enterprise Plan",
-            value: stats?.planBreakdown.enterprise ?? 0,
-            bg: "bg-gradient-to-br from-green-950 to-green-900",
-            sub: "institutions",
-          },
-        ].map((card) => (
-          <div key={card.label} className={`${card.bg} rounded-2xl p-5 shadow-sm`}>
-            <p className="text-green-300 text-xs font-medium">{card.label}</p>
-            <p className="text-white text-4xl font-bold mt-1">{card.value}</p>
-            <p className="text-green-500 text-xs mt-1">{card.sub}</p>
-          </div>
-        ))}
+      <div>
+        <h2 className="text-heading">UniChat Enterprise</h2>
+        <p className="text-subtitle mt-1">Platform overview across every institution</p>
       </div>
 
-      {/* ── Quick actions ───────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          {
-            href: "/dashboard/institutions",
-            title: "Add Institution",
-            desc: "Register a new university or college on the platform",
-            icon: (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-            ),
-            accent: "border-green-200 hover:border-green-500",
-            iconBg: "bg-green-100 text-green-700",
-          },
-          {
-            href: "/dashboard/plans",
-            title: "Manage Plans",
-            desc: "View and configure subscription tiers and features",
-            icon: (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            ),
-            accent: "border-green-200 hover:border-green-500",
-            iconBg: "bg-green-100 text-green-700",
-          },
-          {
-            href: "/dashboard/settings",
-            title: "Platform Settings",
-            desc: "Global feature flags and platform configuration",
-            icon: (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-              </svg>
-            ),
-            accent: "border-green-200 hover:border-green-500",
-            iconBg: "bg-green-100 text-green-700",
-          },
-        ].map((a) => (
-          <Link
-            key={a.href}
-            href={a.href}
-            className={`bg-white rounded-2xl border-2 p-5 transition-all hover:shadow-md ${a.accent}`}
-          >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${a.iconBg}`}>
-              {a.icon}
-            </div>
-            <h3 className="text-green-900 font-semibold text-sm">{a.title}</h3>
-            <p className="text-green-500 text-xs mt-1 leading-relaxed">{a.desc}</p>
-          </Link>
-        ))}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard
+          label="Active Institutions"
+          value={stats?.activeTenants ?? 0}
+          sub={`${stats?.totalTenants ?? 0} total`}
+          icon={Building2}
+          color={ACCENT}
+        />
+        <StatCard label="Total Users" value={stats?.totalUsers ?? 0} sub="across all institutions" icon={Users} color="var(--chart-2)" />
+        <StatCard label="Growth Plan" value={stats?.planBreakdown.growth ?? 0} sub="institutions" icon={TrendingUp} color="var(--chart-3)" />
+        <StatCard label="Enterprise Plan" value={stats?.planBreakdown.enterprise ?? 0} sub="institutions" icon={Crown} color="var(--chart-4)" />
       </div>
 
-      {/* ── Recent institutions table ───────────────── */}
-      <div className="bg-white rounded-2xl border border-green-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-green-100 flex items-center justify-between">
+      <div>
+        <h3 className="text-title mb-3">Quick links</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[
+            { href: "/dashboard/institutions", title: "Add Institution", desc: "Register a new university or college on the platform" },
+            { href: "/dashboard/plans", title: "Manage Plans", desc: "View and configure subscription tiers and features" },
+            { href: "/dashboard/settings", title: "Platform Settings", desc: "Global feature flags and platform configuration" },
+          ].map((a) => (
+            <Link key={a.href} href={a.href}>
+              <Card className="p-4 gap-1 hover:ring-primary/30 hover:shadow-soft-sm transition-all group h-full">
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${ACCENT}1a` }}>
+                    <Building2 className="w-4 h-4" style={{ color: ACCENT }} />
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <p className="font-semibold text-foreground text-sm mt-2">{a.title}</p>
+                <p className="text-metadata">{a.desc}</p>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      <Card className="p-0 overflow-hidden gap-0">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div>
-            <h2 className="text-green-950 font-semibold text-sm">Recent Institutions</h2>
-            <p className="text-green-400 text-xs mt-0.5">Latest additions to the platform</p>
+            <h2 className="text-title">Recent Institutions</h2>
+            <p className="text-metadata mt-0.5">Latest additions to the platform</p>
           </div>
-          <Link href="/dashboard/institutions" className="text-green-600 text-xs font-semibold hover:text-green-800 transition-colors">
+          <Link href="/dashboard/institutions" className="text-xs font-semibold hover:underline" style={{ color: ACCENT }}>
             View all &rarr;
           </Link>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-green-50 text-green-700 text-xs font-semibold uppercase tracking-wider">
-                <th className="px-6 py-3 text-left">Institution</th>
-                <th className="px-6 py-3 text-left">Slug</th>
-                <th className="px-6 py-3 text-left">Plan</th>
-                <th className="px-6 py-3 text-left">Users</th>
-                <th className="px-6 py-3 text-left">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-green-50">
-              {tenants.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-10 text-center text-green-400 text-sm">
-                    No institutions yet.{" "}
-                    <Link href="/dashboard/institutions" className="text-green-600 underline font-medium">
-                      Add the first one.
-                    </Link>
-                  </td>
-                </tr>
-              ) : (
-                tenants.map((t) => (
-                  <tr key={t.id} className="hover:bg-green-50/60 transition-colors">
-                    <td className="px-6 py-3.5 font-semibold text-green-900">{t.name}</td>
-                    <td className="px-6 py-3.5 font-mono text-green-600 text-xs">{t.slug}</td>
-                    <td className="px-6 py-3.5">
-                      <PlanBadge plan={t.plan} />
-                    </td>
-                    <td className="px-6 py-3.5 text-green-700">{t._count?.users ?? 0}</td>
-                    <td className="px-6 py-3.5">
-                      <StatusDot status={t.status} />
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        {tenants.length === 0 ? (
+          <div className="text-center py-10 text-muted-foreground text-sm">
+            No institutions yet.{" "}
+            <Link href="/dashboard/institutions" className="underline font-medium" style={{ color: ACCENT }}>
+              Add the first one.
+            </Link>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="text-table-header px-5">Institution</TableHead>
+                <TableHead className="text-table-header px-5">Slug</TableHead>
+                <TableHead className="text-table-header px-5">Plan</TableHead>
+                <TableHead className="text-table-header px-5">Users</TableHead>
+                <TableHead className="text-table-header px-5">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tenants.map((t) => (
+                <TableRow key={t.id} className="cursor-pointer" onClick={() => (window.location.href = `/dashboard/institutions/${t.id}`)}>
+                  <TableCell className="px-5 py-3.5 text-table-cell font-semibold">{t.name}</TableCell>
+                  <TableCell className="px-5 py-3.5 font-mono text-xs text-muted-foreground">{t.slug}</TableCell>
+                  <TableCell className="px-5 py-3.5">
+                    <Badge className={`${PLAN_BADGE[t.plan] ?? PLAN_BADGE.starter} capitalize`}>{t.plan}</Badge>
+                  </TableCell>
+                  <TableCell className="px-5 py-3.5 text-table-cell">{t._count?.users ?? 0}</TableCell>
+                  <TableCell className="px-5 py-3.5">
+                    <Badge className={`${STATUS_BADGE[t.status] ?? STATUS_BADGE.inactive} capitalize`}>{t.status}</Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
     </div>
   );
 }

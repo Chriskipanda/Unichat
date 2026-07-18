@@ -8,35 +8,16 @@ async function getToken() {
   return jar.get("unichat_admin_token")?.value ?? "";
 }
 
-export async function GET(
-  _request: Request,
-  ctx: RouteContext<"/api/tenants/[id]">
-) {
-  const { id } = await ctx.params;
-  const token = await getToken();
-
-  try {
-    const res = await fetch(`${AUTH}/api/v1/admin/tenants/${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
-  } catch {
-    return NextResponse.json({ error: "Auth service unreachable" }, { status: 503 });
-  }
-}
-
 export async function PATCH(
   request: Request,
-  ctx: RouteContext<"/api/tenants/[id]">
+  ctx: RouteContext<"/api/tenants/[id]/users/[userId]">
 ) {
-  const { id } = await ctx.params;
+  const { id, userId } = await ctx.params;
   const token = await getToken();
   const body = await request.json().catch(() => ({}));
 
   try {
-    const res = await fetch(`${AUTH}/api/v1/admin/tenants/${id}`, {
+    const res = await fetch(`${AUTH}/api/v1/admin/tenants/${id}/users/${userId}`, {
       method: "PATCH",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -50,13 +31,13 @@ export async function PATCH(
 
 export async function DELETE(
   _request: Request,
-  ctx: RouteContext<"/api/tenants/[id]">
+  ctx: RouteContext<"/api/tenants/[id]/users/[userId]">
 ) {
-  const { id } = await ctx.params;
+  const { id, userId } = await ctx.params;
   const token = await getToken();
 
   try {
-    const res = await fetch(`${AUTH}/api/v1/admin/tenants/${id}`, {
+    const res = await fetch(`${AUTH}/api/v1/admin/tenants/${id}/users/${userId}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });

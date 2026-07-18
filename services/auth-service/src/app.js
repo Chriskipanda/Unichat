@@ -344,6 +344,106 @@ fastify.delete('/api/v1/admin/tenants/:id', { preHandler: superAdminOnly }, asyn
   }
 });
 
+fastify.get('/api/v1/admin/tenants/:id', { preHandler: superAdminOnly }, async (request, reply) => {
+  const { id } = request.params;
+  const tenant = await prisma.tenant.findUnique({
+    where: { id },
+    include: { _count: { select: { users: true } } },
+  });
+  if (!tenant) return reply.code(404).send({ error: 'Institution not found' });
+  return { tenant };
+});
+
+// SuperAdmin — manage the staff of a tenant (institution admins / teachers),
+// separate from the institution admin's own /api/v1/institution/users which
+// cannot grant the 'admin' role. This is how a college's first admin account
+// gets created.
+fastify.get('/api/v1/admin/tenants/:id/users', { preHandler: superAdminOnly }, async (request, reply) => {
+  const { id } = request.params;
+  const { role } = request.query || {};
+  const users = await prisma.user.findMany({
+    where: { tenantId: id, ...(role ? { role } : {}) },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true, fullName: true, email: true, phone: true, staffId: true,
+      role: true, isActive: true, createdAt: true, lastLogin: true,
+    },
+  });
+  return { users };
+});
+
+fastify.post('/api/v1/admin/tenants/:id/users', { preHandler: superAdminOnly }, async (request, reply) => {
+  const { id } = request.params;
+  const { fullName, email, phone, staffId, role } = request.body || {};
+  if (!fullName?.trim()) return reply.code(400).send({ error: 'Full name is required' });
+  if (!['admin', 'teacher', 'staff'].includes(role)) {
+    return reply.code(400).send({ error: 'Role must be admin, teacher, or staff' });
+  }
+
+  const tenant = await prisma.tenant.findUnique({ where: { id } });
+  if (!tenant) return reply.code(404).send({ error: 'Institution not found' });
+
+  try {
+    const user = await prisma.user.create({
+      data: {
+        tenantId: id, fullName: fullName.trim(), email: email || null, phone: phone || null,
+        staffId: staffId || null, role, isActive: true,
+      },
+      select: {
+        id: true, fullName: true, email: true, phone: true, staffId: true,
+        role: true, isActive: true, createdAt: true,
+      },
+    });
+    return reply.code(201).send({ user });
+  } catch (err) {
+    if (err.code === 'P2002') return reply.code(409).send({ error: 'A user with this email or ID already exists' });
+    fastify.log.error(err);
+    return reply.code(500).send({ error: 'Internal server error' });
+  }
+});
+
+fastify.patch('/api/v1/admin/tenants/:id/users/:userId', { preHandler: superAdminOnly }, async (request, reply) => {
+  const { id, userId } = request.params;
+  const { fullName, email, phone, staffId, role, isActive } = request.body || {};
+  if (role !== undefined && !['admin', 'teacher', 'staff'].includes(role)) {
+    return reply.code(400).send({ error: 'Role must be admin, teacher, or staff' });
+  }
+
+  const data = {};
+  if (fullName !== undefined) data.fullName = fullName;
+  if (email !== undefined) data.email = email || null;
+  if (phone !== undefined) data.phone = phone || null;
+  if (staffId !== undefined) data.staffId = staffId || null;
+  if (role !== undefined) data.role = role;
+  if (isActive !== undefined) data.isActive = isActive;
+
+  let result;
+  try {
+    result = await prisma.user.updateMany({ where: { id: userId, tenantId: id }, data });
+  } catch (err) {
+    if (err.code === 'P2002') return reply.code(409).send({ error: 'A user with this email or ID already exists' });
+    fastify.log.error(err);
+    return reply.code(500).send({ error: 'Internal server error' });
+  }
+  if (result.count === 0) return reply.code(404).send({ error: 'User not found' });
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true, fullName: true, email: true, phone: true, staffId: true,
+      role: true, isActive: true, createdAt: true,
+    },
+  });
+  return { user };
+});
+
+fastify.delete('/api/v1/admin/tenants/:id/users/:userId', { preHandler: superAdminOnly }, async (request, reply) => {
+  const { id, userId } = request.params;
+  const result = await prisma.user.deleteMany({ where: { id: userId, tenantId: id } });
+  if (result.count === 0) return reply.code(404).send({ error: 'User not found' });
+  return reply.code(204).send();
+});
+
 fastify.get('/api/v1/admin/stats', { preHandler: superAdminOnly }, async (request, reply) => {
   try {
     const [totalTenants, activeTenants, totalUsers, starterCount, growthCount, enterpriseCount] =
