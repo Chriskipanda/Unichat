@@ -216,10 +216,12 @@ services:
     environment:
       AUTH_SERVICE_URL: http://auth-service:3001
       MEDIA_SERVICE_URL: http://media-service:3006
+      MESSAGING_SERVICE_URL: http://messaging-service:3002
       NODE_ENV: production
     depends_on:
       - auth-service
       - media-service
+      - messaging-service
 
   # One-shot: builds the Flutter web app using a containerized Flutter SDK —
   # nothing is installed on the VPS host itself. Not part of the normal
